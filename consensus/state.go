@@ -479,8 +479,8 @@ func (cs *State) SetProposal(proposal *types.Proposal, peerID p2p.ID) error {
 	return nil
 }
 
-// AddProposalBlockPart inputs a part of the proposal block.
-func (cs *State) AddProposalBlockPart(height int64, round int32, part *types.Part, peerID p2p.ID) error {
+// QueueProposalBlockPart inputs a part of the proposal block.
+func (cs *State) QueueProposalBlockPart(height int64, round int32, part *types.Part, peerID p2p.ID) error {
 	if peerID == "" {
 		cs.internalMsgQueue <- msgInfo{&BlockPartMessage{height, round, part}, ""}
 	} else {
@@ -505,7 +505,7 @@ func (cs *State) SetProposalAndBlock(
 
 	for i := 0; i < int(parts.Total()); i++ {
 		part := parts.GetPart(i)
-		if err := cs.AddProposalBlockPart(proposal.Height, proposal.Round, part, peerID); err != nil {
+		if err := cs.QueueProposalBlockPart(proposal.Height, proposal.Round, part, peerID); err != nil {
 			return err
 		}
 	}
@@ -851,8 +851,9 @@ func (cs *State) handleMsg(mi msgInfo) {
 	cs.mtx.Lock()
 	defer cs.mtx.Unlock()
 	var (
-		added bool
-		err   error
+		added       bool
+		isCompleted bool
+		err         error
 	)
 
 	msg, peerID := mi.Msg, mi.PeerID
@@ -865,37 +866,13 @@ func (cs *State) handleMsg(mi msgInfo) {
 
 	case *BlockPartMessage:
 		// if the proposal is complete, we'll enterPrevote or tryFinalizeCommit
-		added, err = cs.addProposalBlockPart(msg, peerID)
-
-		// We unlock here to yield to any routines that need to read the the RoundState.
-		// Previously, this code held the lock from the point at which the final block
-		// part was received until the block executed against the application.
-		// This prevented the reactor from being able to retrieve the most updated
-		// version of the RoundState. The reactor needs the updated RoundState to
-		// gossip the now completed block.
-		//
-		// This code can be further improved by either always operating on a copy
-		// of RoundState and only locking when switching out State's copy of
-		// RoundState with the updated copy or by emitting RoundState events in
-		// more places for routines depending on it to listen for.
-		cs.mtx.Unlock()
-
-		cs.mtx.Lock()
-		if added && cs.ProposalBlockParts.IsComplete() {
-			cs.handleCompleteProposal(msg.Height)
-		}
+		added, isCompleted, err = cs.AddProposalBlockPart(msg, peerID)
 		if added {
 			cs.statsMsgQueue <- mi
-		}
-
-		if err != nil && msg.Round != cs.Round {
-			cs.Logger.Debug(
-				"received block part from wrong round",
-				"height", cs.Height,
-				"cs_round", cs.Round,
-				"block_round", msg.Round,
-			)
-			err = nil
+			if isCompleted {
+				cs.UpdateValidInfoFromProposal()
+				cs.HRSDecisionProposal(msg.Height)
+			}
 		}
 
 	case *VoteMessage:
@@ -1124,7 +1101,7 @@ func (cs *State) enterPropose(height int64, round int32) {
 		cs.newStep()
 
 		// If we have the whole proposal + POL, then goto Prevote now.
-		// else, we'll enterPrevote when the rest of the proposal is received (in AddProposalBlockPart),
+		// else, we'll enterPrevote when the rest of the proposal is received (in QueueProposalBlockPart),
 		// or else after timeoutPropose
 		if cs.isProposalComplete() {
 			cs.enterPrevote(height, cs.Round)
@@ -1903,17 +1880,38 @@ func (cs *State) defaultSetProposal(proposal *types.Proposal) error {
 	return nil
 }
 
-// NOTE: block is not necessarily valid.
-// Asynchronously triggers either enterPrevote (before we timeout of propose) or tryFinalizeCommit,
-// once we have the full block.
-func (cs *State) addProposalBlockPart(msg *BlockPartMessage, peerID p2p.ID) (added bool, err error) {
+func (cs *State) UpdateValidInfoFromProposal() {
+	prevotes := cs.Votes.Prevotes(cs.Round)
+	blockID, hasTwoThirds := prevotes.TwoThirdsMajority()
+	if hasTwoThirds && !blockID.IsZero() &&
+		cs.ValidRound < cs.Round &&
+		cs.ProposalBlock.HashesTo(blockID.Hash) {
+
+		cs.Logger.Debug(
+			"updating valid block to new proposal block",
+			"valid_round", cs.Round,
+			"valid_block_hash", log.NewLazyBlockHash(cs.ProposalBlock),
+		)
+
+		cs.ValidRound = cs.Round
+		cs.ValidBlock = cs.ProposalBlock
+		cs.ValidBlockParts = cs.ProposalBlockParts
+	}
+	// TODO: In case there is +2/3 majority in Prevotes set for some
+	// block and cs.ProposalBlock contains different block, either
+	// proposer is faulty or voting power of faulty processes is more
+	// than 1/3. We should trigger in the future accountability
+	// procedure at this point.
+}
+
+func (cs *State) AddProposalBlockPart(msg *BlockPartMessage, peerID p2p.ID) (added, isCompleted bool, err error) {
 	height, round, part := msg.Height, msg.Round, msg.Part
 
 	// Blocks might be reused, so round mismatch is OK
 	if cs.Height != height {
 		cs.Logger.Debug("received block part from wrong height", "height", height, "round", round)
 		cs.metrics.BlockGossipPartsReceived.With("matches_current", "false").Add(1)
-		return false, nil
+		return false, false, nil
 	}
 
 	// We're not expecting a block part.
@@ -1928,7 +1926,7 @@ func (cs *State) addProposalBlockPart(msg *BlockPartMessage, peerID p2p.ID) (add
 			"index", part.Index,
 			"peer", peerID,
 		)
-		return false, nil
+		return false, false, nil
 	}
 
 	added, err = cs.ProposalBlockParts.AddPart(part)
@@ -1936,7 +1934,7 @@ func (cs *State) addProposalBlockPart(msg *BlockPartMessage, peerID p2p.ID) (add
 		if errors.Is(err, types.ErrPartSetInvalidProof) || errors.Is(err, types.ErrPartSetUnexpectedIndex) {
 			cs.metrics.BlockGossipPartsReceived.With("matches_current", "false").Add(1)
 		}
-		return added, err
+		return added, false, err
 	}
 
 	cs.metrics.BlockGossipPartsReceived.With("matches_current", "true").Add(1)
@@ -1951,25 +1949,36 @@ func (cs *State) addProposalBlockPart(msg *BlockPartMessage, peerID p2p.ID) (add
 		maxBytes = int64(types.MaxBlockSizeBytes)
 	}
 	if cs.ProposalBlockParts.ByteSize() > maxBytes {
-		return added, fmt.Errorf("total size of proposal block parts exceeds maximum block bytes (%d > %d)",
+		return added, false, fmt.Errorf("total size of proposal block parts exceeds maximum block bytes (%d > %d)",
 			cs.ProposalBlockParts.ByteSize(), maxBytes,
 		)
 	}
-	if added && cs.ProposalBlockParts.IsComplete() {
+
+	if err != nil && msg.Round != cs.Round {
+		cs.Logger.Debug(
+			"received block part from wrong round",
+			"height", cs.Height,
+			"cs_round", cs.Round,
+			"block_round", msg.Round,
+		)
+		err = nil
+	}
+	isCompleted = cs.ProposalBlockParts.IsComplete()
+	if added && isCompleted {
 		bz, err := io.ReadAll(cs.ProposalBlockParts.GetReader())
 		if err != nil {
-			return added, err
+			return added, isCompleted, err
 		}
 
 		pbb := new(cmtproto.Block)
 		err = proto.Unmarshal(bz, pbb)
 		if err != nil {
-			return added, err
+			return added, isCompleted, err
 		}
 
 		block, err := types.BlockFromProto(pbb)
 		if err != nil {
-			return added, err
+			return added, isCompleted, err
 		}
 
 		cs.ProposalBlock = block
@@ -1981,35 +1990,28 @@ func (cs *State) addProposalBlockPart(msg *BlockPartMessage, peerID p2p.ID) (add
 			cs.Logger.Error("failed publishing event complete proposal", "err", err)
 		}
 	}
-	return added, nil
+	// We unlock here to yield to any routines that need to read the the RoundState.
+	// Previously, this code held the lock from the point at which the final block
+	// part was received until the block executed against the application.
+	// This prevented the reactor from being able to retrieve the most updated
+	// version of the RoundState. The reactor needs the updated RoundState to
+	// gossip the now completed block.
+	//
+	// This code can be further improved by either always operating on a copy
+	// of RoundState and only locking when switching out State's copy of
+	// RoundState with the updated copy or by emitting RoundState events in
+	// more places for routines depending on it to listen for.
+	cs.mtx.Unlock()
+
+	cs.mtx.Lock()
+	return added, isCompleted, nil
 }
 
-func (cs *State) handleCompleteProposal(blockHeight int64) {
-	// Update Valid* if we can.
-	prevotes := cs.Votes.Prevotes(cs.Round)
-	blockID, hasTwoThirds := prevotes.TwoThirdsMajority()
-	if hasTwoThirds && !blockID.IsZero() && (cs.ValidRound < cs.Round) {
-		if cs.ProposalBlock.HashesTo(blockID.Hash) {
-			cs.Logger.Debug(
-				"updating valid block to new proposal block",
-				"valid_round", cs.Round,
-				"valid_block_hash", log.NewLazyBlockHash(cs.ProposalBlock),
-			)
-
-			cs.ValidRound = cs.Round
-			cs.ValidBlock = cs.ProposalBlock
-			cs.ValidBlockParts = cs.ProposalBlockParts
-		}
-		// TODO: In case there is +2/3 majority in Prevotes set for some
-		// block and cs.ProposalBlock contains different block, either
-		// proposer is faulty or voting power of faulty processes is more
-		// than 1/3. We should trigger in the future accountability
-		// procedure at this point.
-	}
-
+func (cs *State) HRSDecisionProposal(blockHeight int64) {
 	if cs.Step <= cstypes.RoundStepPropose && cs.isProposalComplete() {
 		// Move onto the next step
 		cs.enterPrevote(blockHeight, cs.Round)
+		_, hasTwoThirds := cs.Votes.Prevotes(cs.Round).TwoThirdsMajority()
 		if hasTwoThirds { // this is optimisation as this will be triggered when prevote is added
 			cs.enterPrecommit(blockHeight, cs.Round)
 		}
