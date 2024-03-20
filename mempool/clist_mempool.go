@@ -17,6 +17,16 @@ import (
 	"github.com/cometbft/cometbft/types"
 )
 
+type count32 int32
+
+func (c *count32) inc() int32 {
+	return atomic.AddInt32((*int32)(c), 1)
+}
+
+func (c *count32) get() int32 {
+	return atomic.LoadInt32((*int32)(c))
+}
+
 // CListMempool is an ordered in-memory pool for transactions before they are
 // proposed in a consensus round. Transaction validity is checked using the
 // CheckTx abci message before the transaction is added to the pool. The
@@ -58,6 +68,8 @@ type CListMempool struct {
 
 	logger  log.Logger
 	metrics *Metrics
+
+	counter count32
 }
 
 var _ Mempool = &CListMempool{}
@@ -96,6 +108,7 @@ func NewCListMempool(
 		option(mp)
 	}
 
+	mp.counter = DefaultMaxTxsCnt
 	return mp
 }
 
@@ -188,6 +201,7 @@ func (mem *CListMempool) Flush() {
 	mem.cache.Reset()
 
 	mem.removeAllTxs()
+	mem.resetCounter()
 }
 
 // TxsFront returns the first transaction in the ordered list for peer
@@ -358,6 +372,14 @@ func (mem *CListMempool) isFull(txSize int) error {
 		memSize  = mem.Size()
 		txsBytes = mem.SizeBytes()
 	)
+	if mem.counter.get() > DefaultMaxTxsCnt {
+		return ErrMempoolIsFull{
+			NumTxs:      memSize,
+			MaxTxs:      mem.config.Size,
+			TxsBytes:    txsBytes,
+			MaxTxsBytes: mem.config.MaxTxsBytes,
+		}
+	}
 
 	if memSize >= mem.config.Size || int64(txSize)+txsBytes > mem.config.MaxTxsBytes {
 		return ErrMempoolIsFull{
@@ -417,6 +439,7 @@ func (mem *CListMempool) resCbFirstTime(
 			}
 			memTx.addSender(txInfo.SenderID)
 			mem.addTx(memTx)
+			mem.incrementCounter()
 			mem.logger.Debug(
 				"added good transaction",
 				"tx", types.Tx(tx).Hash(),
@@ -688,4 +711,12 @@ func (mem *CListMempool) recheckTxs() {
 	// In <v0.37 we would call FlushAsync at the end of recheckTx forcing the buffer to flush
 	// all pending messages to the app. There doesn't seem to be any need here as the buffer
 	// will get flushed regularly or when filled.
+}
+
+func (mem *CListMempool) incrementCounter() int32 {
+	return mem.counter.inc()
+}
+
+func (mem *CListMempool) resetCounter() {
+	mem.counter = 0
 }

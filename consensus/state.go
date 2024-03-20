@@ -64,6 +64,7 @@ func (ti *timeoutInfo) String() string {
 // interface to the mempool
 type txNotifier interface {
 	TxsAvailable() <-chan struct{}
+	Flush()
 }
 
 // interface to the evidence pool
@@ -1798,6 +1799,9 @@ func (cs *State) finalizeCommit(height int64) {
 	// Schedule Round0 to start soon.
 	cs.scheduleRound0(&cs.RoundState)
 
+	// succeeded to commit the block
+	// empty the mempool
+	cs.txNotifier.Flush()
 	// By here,
 	// * cs.Height has been increment to height+1
 	// * cs.Step is now cstypes.RoundStepNewHeight
@@ -2321,6 +2325,7 @@ func (cs *State) addVote(vote *types.Vote, peerID p2p.ID) (added bool, err error
 
 			if len(blockID.Hash) != 0 {
 				cs.enterCommit(height, vote.Round)
+				// empty mempool
 				if cs.config.SkipTimeoutCommit && precommits.HasAll() {
 					cs.enterNewRound(cs.Height, 0)
 				}
