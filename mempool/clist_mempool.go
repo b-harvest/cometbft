@@ -201,7 +201,7 @@ func (mem *CListMempool) Flush() {
 	mem.cache.Reset()
 
 	mem.removeAllTxs()
-	mem.resetCounter()
+	mem.ResetCounter()
 }
 
 // TxsFront returns the first transaction in the ordered list for peer
@@ -717,6 +717,6 @@ func (mem *CListMempool) incrementCounter() int32 {
 	return mem.counter.inc()
 }
 
-func (mem *CListMempool) resetCounter() {
+func (mem *CListMempool) ResetCounter() {
 	mem.counter = 0
 }

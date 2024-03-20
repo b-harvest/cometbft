@@ -74,6 +74,8 @@ func (*NopMempool) Size() int { return 0 }
 // SizeBytes always returns 0.
 func (*NopMempool) SizeBytes() int64 { return 0 }
 
+func (*NopMempool) ResetCounter() {}
+
 // NopMempoolReactor is a mempool reactor that does nothing.
 type NopMempoolReactor struct {
 	service.BaseService
