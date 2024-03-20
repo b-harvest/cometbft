@@ -108,7 +108,7 @@ func NewCListMempool(
 		option(mp)
 	}
 
-	mp.counter = DefaultMaxTxsCnt
+	mp.counter = 0
 	return mp
 }
 

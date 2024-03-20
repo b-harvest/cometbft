@@ -358,6 +358,29 @@ func TestMempool_KeepInvalidTxsInCache(t *testing.T) {
 	}
 }
 
+func TestTxsCntLimit(t *testing.T) {
+	app := kvstore.NewInMemoryApplication()
+	cc := proxy.NewLocalClientCreator(app)
+	mp, cleanup := newMempoolWithApp(cc)
+	defer cleanup()
+
+	count := 200
+	txs := make(types.Txs, count)
+	txInfo := TxInfo{SenderID: UnknownPeerID}
+	var err error
+	for i := 0; i < count; i++ {
+		txBytes := kvstore.NewRandomTx(20)
+		txs[i] = txBytes
+		if err = mp.CheckTx(txBytes, nil, txInfo); err != nil {
+			if IsPreCheckError(err) {
+				t.Fatalf("PreCheck failed: %v while checking #%d tx", err, i)
+				continue
+			}
+		}
+	}
+	require.ErrorContains(t, err, "mempool is full")
+}
+
 func TestTxsAvailable(t *testing.T) {
 	app := kvstore.NewInMemoryApplication()
 	cc := proxy.NewLocalClientCreator(app)
