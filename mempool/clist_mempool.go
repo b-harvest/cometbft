@@ -372,7 +372,8 @@ func (mem *CListMempool) isFull(txSize int) error {
 		memSize  = mem.Size()
 		txsBytes = mem.SizeBytes()
 	)
-	if mem.counter.get() > DefaultMaxTxsCnt {
+	if mem.counter.get() > DefaultRateLimitPerBlock {
+		mem.logger.Error("mempool is full, rate limit exceeded")
 		return ErrMempoolIsFull{
 			NumTxs:      memSize,
 			MaxTxs:      mem.config.Size,
@@ -718,5 +719,6 @@ func (mem *CListMempool) incrementCounter() int32 {
 }
 
 func (mem *CListMempool) ResetCounter() {
+	mem.logger.Debug("resetting rate limit counter")
 	mem.counter = 0
 }

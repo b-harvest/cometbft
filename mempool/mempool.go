@@ -22,7 +22,7 @@ const (
 
 	MaxActiveIDs = math.MaxUint16
 
-	DefaultMaxTxsCnt = 600
+	DefaultRateLimitPerBlock = 680
 )
 
 //go:generate ../scripts/mockery_generate.sh Mempool
