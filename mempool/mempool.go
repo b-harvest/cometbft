@@ -184,6 +184,15 @@ func (e ErrMempoolIsFull) Error() string {
 	)
 }
 
+type ErrMempoolRateLimitExceeded struct {
+	Rate  int
+	Count int32
+}
+
+func (e ErrMempoolRateLimitExceeded) Error() string {
+	return fmt.Sprintf("mempool rate limit exceeded: rate %d, count %d", e.Rate, e.Count)
+}
+
 // ErrPreCheck defines an error where a transaction fails a pre-check.
 type ErrPreCheck struct {
 	Reason error
