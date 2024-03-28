@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/cometbft/cometbft/mempool"
 	"github.com/cometbft/cometbft/version"
 )
 
@@ -736,6 +737,8 @@ type MempoolConfig struct {
 	// This only accounts for raw transactions (e.g. given 1MB transactions and
 	// max_txs_bytes=5MB, mempool will only accept 5 transactions).
 	MaxTxsBytes int64 `mapstructure:"max_txs_bytes"`
+	// Maximum possible input txs during consensus
+	RateLimit int32 `mapstructure:"rate_limit"`
 	// Size of the cache (used to filter transactions we saw earlier) in transactions
 	CacheSize int `mapstructure:"cache_size"`
 	// Do not remove invalid transactions from the cache (default: false)
@@ -776,6 +779,7 @@ func DefaultMempoolConfig() *MempoolConfig {
 		// ABCI Recheck
 		Size:        5000,
 		MaxTxsBytes: 1024 * 1024 * 1024, // 1GB
+		RateLimit:   mempool.DefaultRateLimitPerBlock,
 		CacheSize:   10000,
 		MaxTxBytes:  1024 * 1024, // 1MB
 		ExperimentalMaxGossipConnectionsToNonPersistentPeers: 0,
@@ -811,6 +815,9 @@ func (cfg *MempoolConfig) ValidateBasic() error {
 	}
 	if cfg.Size < 0 {
 		return errors.New("size can't be negative")
+	}
+	if cfg.RateLimit < 0 {
+		return errors.New("rate_limit can't be negative")
 	}
 	if cfg.MaxTxsBytes < 0 {
 		return errors.New("max_txs_bytes can't be negative")

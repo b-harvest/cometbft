@@ -185,7 +185,7 @@ func (e ErrMempoolIsFull) Error() string {
 }
 
 type ErrMempoolRateLimitExceeded struct {
-	Rate  int
+	Rate  int32
 	Count int32
 }
 
