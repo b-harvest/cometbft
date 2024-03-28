@@ -21,8 +21,6 @@ const (
 	UnknownPeerID uint16 = 0
 
 	MaxActiveIDs = math.MaxUint16
-
-	DefaultRateLimitPerBlock = 600
 )
 
 //go:generate ../scripts/mockery_generate.sh Mempool

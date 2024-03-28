@@ -10,7 +10,6 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/cometbft/cometbft/mempool"
 	"github.com/cometbft/cometbft/version"
 )
 
@@ -779,7 +778,7 @@ func DefaultMempoolConfig() *MempoolConfig {
 		// ABCI Recheck
 		Size:        5000,
 		MaxTxsBytes: 1024 * 1024 * 1024, // 1GB
-		RateLimit:   mempool.DefaultRateLimitPerBlock,
+		RateLimit:   400,
 		CacheSize:   10000,
 		MaxTxBytes:  1024 * 1024, // 1MB
 		ExperimentalMaxGossipConnectionsToNonPersistentPeers: 0,
