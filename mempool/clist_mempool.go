@@ -3,8 +3,10 @@ package mempool
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	abci "github.com/cometbft/cometbft/abci/types"
 	"github.com/cometbft/cometbft/config"
@@ -394,7 +396,7 @@ func (mem *CListMempool) resCbFirstTime(
 			if err := mem.isFull(len(tx)); err != nil {
 				// remove from cache (mempool might have a space later)
 				mem.cache.Remove(tx)
-				mem.logger.Error(err.Error())
+				// mem.logger.Error(err.Error())
 				return
 			}
 
@@ -617,6 +619,7 @@ func (mem *CListMempool) Update(
 		mem.postCheck = postCheck
 	}
 
+	mem.logger.Info(fmt.Sprintf("[%s]remove processed txs", time.Now().Format("15:04:05.000")), "height", height, "processedTxs", len(txs), "currentMempoolSize", mem.Size())
 	for i, tx := range txs {
 		if txResults[i].Code == abci.CodeTypeOK {
 			// Add valid committed tx to the cache (if missing).
@@ -642,16 +645,19 @@ func (mem *CListMempool) Update(
 				"error", err.Error())
 		}
 	}
+	mem.logger.Info(fmt.Sprintf("[%s]done remove processed txs", time.Now().Format("15:04:05.000")), "currentMempoolSize", mem.Size())
 
 	// Either recheck non-committed txs to see if they became invalid
 	// or just notify there're some txs left.
 	if mem.Size() > 0 {
 		if mem.config.Recheck {
+			mem.logger.Info(fmt.Sprintf("[%s]recheck txs", time.Now().Format("15:04:05.000")), "numTxsToRecheck", mem.Size())
 			mem.logger.Debug("recheck txs", "numtxs", mem.Size(), "height", height)
 			mem.recheckTxs()
 			// At this point, mem.txs are being rechecked.
 			// mem.recheckCursor re-scans mem.txs and possibly removes some txs.
 			// Before mem.Reap(), we should wait for mem.recheckCursor to be nil.
+			mem.logger.Info(fmt.Sprintf("[%s]done recheck txs", time.Now().Format("15:04:05.000")))
 		} else {
 			mem.notifyTxsAvailable()
 		}

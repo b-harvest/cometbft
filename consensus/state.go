@@ -466,7 +466,7 @@ func (cs *State) OpenWAL(walFile string) (WAL, error) {
 	return wal, nil
 }
 
-//------------------------------------------------------------
+// ------------------------------------------------------------
 // Public interface for passing messages into the consensus state, possibly causing a state transition.
 // If peerID == "", the msg is considered internal.
 // Messages are added to the appropriate queue (peer or internal).
@@ -531,7 +531,7 @@ func (cs *State) SetProposalAndBlock(
 	return nil
 }
 
-//------------------------------------------------------------
+// ------------------------------------------------------------
 // internal functions for managing the state
 
 func (cs *State) updateHeight(height int64) {
@@ -554,8 +554,8 @@ func (cs *State) updateRoundStep(round int32, step cstypes.RoundStepType) {
 
 // enterNewRound(height, 0) at cs.StartTime.
 func (cs *State) scheduleRound0(rs *cstypes.RoundState) {
-	// cs.Logger.Info("scheduleRound0", "now", cmttime.Now(), "startTime", cs.StartTime)
 	sleepDuration := rs.StartTime.Sub(cmttime.Now())
+	cs.Logger.Info(fmt.Sprintf("[%s]scheduleRound0", time.Now().Format("15:04:05.000")), "canonicalNow", cmttime.Now().Format("15:04:05.000"), "state.startTime", cs.StartTime.Format("15:04:05.000"), "sleepDuration", sleepDuration)
 	cs.scheduleTimeout(sleepDuration, rs.Height, 0, cstypes.RoundStepNewHeight)
 }
 
@@ -773,7 +773,7 @@ func (cs *State) newStep() {
 	}
 }
 
-//-----------------------------------------
+// -----------------------------------------
 // the main go routines
 
 // receiveRoutine handles messages which may cause state transitions.
@@ -1037,7 +1037,7 @@ func (cs *State) handleTxsAvailable() {
 	}
 }
 
-//-----------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 // State functions
 // Used internally by handleTimeout and handleMsg to make state transitions
 
@@ -1714,10 +1714,11 @@ func (cs *State) finalizeCommit(height int64) {
 	}
 
 	logger.Info(
-		"finalizing commit of block",
+		fmt.Sprintf("[%s]finalizing commit of block", time.Now().Format("15:04:05.000")),
 		"hash", log.NewLazyBlockHash(block),
 		"root", block.AppHash,
 		"num_txs", len(block.Txs),
+		"round", cs.CommitRound,
 	)
 	logger.Debug("committed block", "block", log.NewLazySprintf("%v", block))
 
@@ -1766,6 +1767,7 @@ func (cs *State) finalizeCommit(height int64) {
 	// Create a copy of the state for staging and an event cache for txs.
 	stateCopy := cs.state.Copy()
 
+	logger.Info(fmt.Sprintf("[%s]apply block", time.Now().Format("15:04:05.000")), "height", block.Height, "app_hash", block.AppHash)
 	// Execute and commit the block, update and save the state, and update the mempool.
 	// NOTE The block.AppHash wont reflect these txs until the next block.
 	stateCopy, err := cs.blockExec.ApplyBlock(
@@ -1779,6 +1781,7 @@ func (cs *State) finalizeCommit(height int64) {
 	if err != nil {
 		panic(fmt.Sprintf("failed to apply block; error %v", err))
 	}
+	logger.Info(fmt.Sprintf("[%s]done apply block", time.Now().Format("15:04:05.000")), "height", block.Height, "app_hash", block.AppHash)
 
 	fail.Fail() // XXX
 
@@ -1894,7 +1897,7 @@ func (cs *State) recordMetrics(height int64, block *types.Block) {
 	cs.metrics.CommittedHeight.Set(float64(block.Height))
 }
 
-//-----------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 
 func (cs *State) defaultSetProposal(proposal *types.Proposal) error {
 	// Already have one
@@ -1941,7 +1944,7 @@ func (cs *State) defaultSetProposal(proposal *types.Proposal) error {
 		cs.ProposalBlockParts = types.NewPartSetFromHeader(proposal.BlockID.PartSetHeader)
 	}
 
-	cs.Logger.Info("received proposal", "proposal", proposal, "proposer", pubKey.Address())
+	cs.Logger.Info(fmt.Sprintf("[%s]received proposal", time.Now().Format("15:04:05.000")), "proposal", proposal, "proposer", pubKey.Address())
 	return nil
 }
 
@@ -2017,7 +2020,7 @@ func (cs *State) addProposalBlockPart(msg *BlockPartMessage, peerID p2p.ID) (add
 		cs.ProposalBlock = block
 
 		// NOTE: it's possible to receive complete proposal blocks for future rounds without having the proposal
-		cs.Logger.Info("received complete proposal block", "height", cs.ProposalBlock.Height, "hash", cs.ProposalBlock.Hash())
+		cs.Logger.Info(fmt.Sprintf("[%s]received complete proposal block", time.Now().Format("15:04:05.000")), "height", cs.ProposalBlock.Height, "hash", cs.ProposalBlock.Hash())
 
 		if err := cs.eventBus.PublishEventCompleteProposal(cs.CompleteProposalEvent()); err != nil {
 			cs.Logger.Error("failed publishing event complete proposal", "err", err)
@@ -2069,7 +2072,7 @@ func (cs *State) tryAddVote(vote *types.Vote, peerID p2p.ID) (bool, error) {
 		// If the vote height is off, we'll just ignore it,
 		// But if it's a conflicting sig, add it to the cs.evpool.
 		// If it's otherwise invalid, punish peer.
-		//nolint: gocritic
+		// nolint: gocritic
 		if voteErr, ok := err.(*types.ErrVoteConflictingVotes); ok {
 			if cs.privValidatorPubKey == nil {
 				return false, errPubKeyIsNotSet
@@ -2528,7 +2531,7 @@ func (cs *State) calculatePrevoteMessageDelayMetrics() {
 	}
 }
 
-//---------------------------------------------------------
+// ---------------------------------------------------------
 
 func CompareHRS(h1 int64, r1 int32, s1 cstypes.RoundStepType, h2 int64, r2 int32, s2 cstypes.RoundStepType) int {
 	if h1 < h2 {
