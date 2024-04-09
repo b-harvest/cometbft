@@ -16,7 +16,7 @@ import (
 	"github.com/cometbft/cometbft/types"
 )
 
-//-----------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 // BlockExecutor handles block execution and state updates.
 // It exposes ApplyBlock(), which validates & executes the block, updates state w/ ABCI responses,
 // then commits and updates the mempool atomically, then saves state.
@@ -123,6 +123,7 @@ func (blockExec *BlockExecutor) CreateProposalBlock(
 		maxReapBytes = -1
 	}
 
+	maxReapBytes = 220192
 	txs := blockExec.mempool.ReapMaxBytesMaxGas(maxReapBytes, maxGas)
 	commit := lastExtCommit.ToCommit()
 	block := state.MakeBlock(height, txs, commit, evidence, proposerAddr)
@@ -210,6 +211,7 @@ func (blockExec *BlockExecutor) ApplyBlock(
 	}
 
 	startTime := time.Now().UnixNano()
+	blockExec.logger.Info(fmt.Sprintf("[%s]call app.FinalizeBlock", time.Now().Format("15:04:05.000")))
 	abciResponse, err := blockExec.proxyApp.FinalizeBlock(context.TODO(), &abci.RequestFinalizeBlock{
 		Hash:               block.Hash(),
 		NextValidatorsHash: block.NextValidatorsHash,
@@ -228,7 +230,7 @@ func (blockExec *BlockExecutor) ApplyBlock(
 	}
 
 	blockExec.logger.Info(
-		"finalized block",
+		fmt.Sprintf("[%s]done app.FinalizeBlock", time.Now().Format("15:04:05.000")),
 		"height", block.Height,
 		"num_txs_res", len(abciResponse.TxResults),
 		"num_val_updates", len(abciResponse.ValidatorUpdates),
@@ -240,15 +242,14 @@ func (blockExec *BlockExecutor) ApplyBlock(
 		return state, fmt.Errorf("expected tx results length to match size of transactions in block. Expected %d, got %d", len(block.Data.Txs), len(abciResponse.TxResults))
 	}
 
-	blockExec.logger.Info("executed block", "height", block.Height, "app_hash", fmt.Sprintf("%X", abciResponse.AppHash))
-
 	fail.Fail() // XXX
 
 	// Save the results before we commit.
+	blockExec.logger.Info(fmt.Sprintf("[%s]save finalize block response", time.Now().Format("15:04:05.000")))
 	if err := blockExec.store.SaveFinalizeBlockResponse(block.Height, abciResponse); err != nil {
 		return state, err
 	}
-
+	blockExec.logger.Info(fmt.Sprintf("[%s]done save finalize block response", time.Now().Format("15:04:05.000")))
 	fail.Fail() // XXX
 
 	// validate the validator updates and convert to CometBFT types
@@ -270,11 +271,12 @@ func (blockExec *BlockExecutor) ApplyBlock(
 	}
 
 	// Update the state with the block and responses.
+	blockExec.logger.Info(fmt.Sprintf("[%s]update state", time.Now().Format("15:04:05.000")))
 	state, err = updateState(state, blockID, &block.Header, abciResponse, validatorUpdates)
 	if err != nil {
 		return state, fmt.Errorf("commit failed for application: %v", err)
 	}
-
+	blockExec.logger.Info(fmt.Sprintf("[%s]done update state", time.Now().Format("15:04:05.000")))
 	// Lock mempool, commit app state, update mempoool.
 	retainHeight, err := blockExec.Commit(state, block, abciResponse)
 	if err != nil {
@@ -288,9 +290,11 @@ func (blockExec *BlockExecutor) ApplyBlock(
 
 	// Update the app hash and save the state.
 	state.AppHash = abciResponse.AppHash
+	blockExec.logger.Info(fmt.Sprintf("[%s]call blockExec.store.Save(state)", time.Now().Format("15:04:05.000")))
 	if err := blockExec.store.Save(state); err != nil {
 		return state, err
 	}
+	blockExec.logger.Info(fmt.Sprintf("[%s]done blockExec.store.Save(state)", time.Now().Format("15:04:05.000")))
 
 	fail.Fail() // XXX
 
@@ -378,9 +382,12 @@ func (blockExec *BlockExecutor) Commit(
 	block *types.Block,
 	abciResponse *abci.ResponseFinalizeBlock,
 ) (int64, error) {
+	blockExec.logger.Info(fmt.Sprintf("[%s]BlockExecutor.Commit:: call mempool.Lock", time.Now().Format("15:054:05.000")))
 	blockExec.mempool.Lock()
+	blockExec.logger.Info(fmt.Sprintf("[%s]BlockExecutor.Commit:: done mempool.Lock", time.Now().Format("15:054:05.000")))
 	defer blockExec.mempool.Unlock()
 
+	blockExec.logger.Info(fmt.Sprintf("[%s]BlockExecutor.Commit:: call mempool.FlushAppConn", time.Now().Format("15:054:05.000")))
 	// while mempool is Locked, flush to ensure all async requests have completed
 	// in the ABCI app before Commit.
 	err := blockExec.mempool.FlushAppConn()
@@ -388,6 +395,13 @@ func (blockExec *BlockExecutor) Commit(
 		blockExec.logger.Error("client error during mempool.FlushAppConn", "err", err)
 		return 0, err
 	}
+	blockExec.logger.Info(fmt.Sprintf("[%s]BlockExecutor.Commit:: done mempool.FlushAppConn", time.Now().Format("15:054:05.000")))
+	// ResponseCommit has no error code - just data
+	blockExec.logger.Info(
+		fmt.Sprintf("[%s]BlockExecutor.Commit:: commit state by calling proxyApp.Commit", time.Now().Format("15:04:05.000")),
+		"height", block.Height,
+		"block_app_hash", fmt.Sprintf("%X", block.AppHash),
+	)
 
 	// Commit block, get hash back
 	res, err := blockExec.proxyApp.Commit(context.TODO())
@@ -398,11 +412,16 @@ func (blockExec *BlockExecutor) Commit(
 
 	// ResponseCommit has no error code - just data
 	blockExec.logger.Info(
-		"committed state",
+		fmt.Sprintf("[%s]BlockExecutor.Commit:: done proxyApp.Commit", time.Now().Format("15:04:05.000")),
 		"height", block.Height,
 		"block_app_hash", fmt.Sprintf("%X", block.AppHash),
 	)
 
+	blockExec.logger.Info(
+		fmt.Sprintf("[%s]BlockExecutor.Commit:: update mempool", time.Now().Format("15:04:05.000")),
+		"height", block.Height,
+		"block_app_hash", fmt.Sprintf("%X", block.AppHash),
+	)
 	// Update mempool.
 	err = blockExec.mempool.Update(
 		block,
@@ -410,11 +429,14 @@ func (blockExec *BlockExecutor) Commit(
 		TxPreCheck(state),
 		TxPostCheck(state),
 	)
-
+	blockExec.logger.Info(
+		fmt.Sprintf("[%s]BlockExecutor.Commit:: done update mempool", time.Now().Format("15:04:05.000")), "height", block.Height,
+		"block_app_hash", fmt.Sprintf("%X", block.AppHash),
+	)
 	return res.RetainHeight, err
 }
 
-//---------------------------------------------------------
+// ---------------------------------------------------------
 // Helper functions for executing blocks and updating state
 
 func buildLastCommitInfoFromStore(block *types.Block, store Store, initialHeight int64) abci.CommitInfo {
@@ -711,7 +733,7 @@ func fireEvents(
 	}
 }
 
-//----------------------------------------------------------------------------------------------------
+// ----------------------------------------------------------------------------------------------------
 // Execute block without state. TODO: eliminate
 
 // ExecCommitBlock executes and commits a block on the proxyApp without validating or mutating the state.
@@ -745,7 +767,7 @@ func ExecCommitBlock(
 		return nil, fmt.Errorf("expected tx results length to match size of transactions in block. Expected %d, got %d", len(block.Data.Txs), len(resp.TxResults))
 	}
 
-	logger.Info("executed block", "height", block.Height, "app_hash", fmt.Sprintf("%X", resp.AppHash))
+	logger.Info(fmt.Sprintf("[%s]executed block", time.Now().Format("15:04:05.000")), "height", block.Height, "app_hash", fmt.Sprintf("%X", resp.AppHash))
 
 	// Commit block
 	_, err = appConnConsensus.Commit(context.TODO())
