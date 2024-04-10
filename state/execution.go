@@ -123,7 +123,9 @@ func (blockExec *BlockExecutor) CreateProposalBlock(
 		maxReapBytes = -1
 	}
 
-	maxReapBytes = 220192
+	// maxReapBytes = 365161 // 1,000 txs
+	// maxReapBytes = 220192
+	maxReapBytes = 547742 // 1,500 txs
 	txs := blockExec.mempool.ReapMaxBytesMaxGas(maxReapBytes, maxGas)
 	commit := lastExtCommit.ToCommit()
 	block := state.MakeBlock(height, txs, commit, evidence, proposerAddr)
@@ -382,12 +384,12 @@ func (blockExec *BlockExecutor) Commit(
 	block *types.Block,
 	abciResponse *abci.ResponseFinalizeBlock,
 ) (int64, error) {
-	blockExec.logger.Info(fmt.Sprintf("[%s]BlockExecutor.Commit:: call mempool.Lock", time.Now().Format("15:054:05.000")))
+	blockExec.logger.Info(fmt.Sprintf("[%s]BlockExecutor.Commit:: call mempool.Lock", time.Now().Format("15:04:05.000")))
 	blockExec.mempool.Lock()
-	blockExec.logger.Info(fmt.Sprintf("[%s]BlockExecutor.Commit:: done mempool.Lock", time.Now().Format("15:054:05.000")))
+	blockExec.logger.Info(fmt.Sprintf("[%s]BlockExecutor.Commit:: done mempool.Lock", time.Now().Format("15:04:05.000")))
 	defer blockExec.mempool.Unlock()
 
-	blockExec.logger.Info(fmt.Sprintf("[%s]BlockExecutor.Commit:: call mempool.FlushAppConn", time.Now().Format("15:054:05.000")))
+	blockExec.logger.Info(fmt.Sprintf("[%s]BlockExecutor.Commit:: call mempool.FlushAppConn", time.Now().Format("15:04:05.000")))
 	// while mempool is Locked, flush to ensure all async requests have completed
 	// in the ABCI app before Commit.
 	err := blockExec.mempool.FlushAppConn()
@@ -395,7 +397,7 @@ func (blockExec *BlockExecutor) Commit(
 		blockExec.logger.Error("client error during mempool.FlushAppConn", "err", err)
 		return 0, err
 	}
-	blockExec.logger.Info(fmt.Sprintf("[%s]BlockExecutor.Commit:: done mempool.FlushAppConn", time.Now().Format("15:054:05.000")))
+	blockExec.logger.Info(fmt.Sprintf("[%s]BlockExecutor.Commit:: done mempool.FlushAppConn", time.Now().Format("15:04:05.000")))
 	// ResponseCommit has no error code - just data
 	blockExec.logger.Info(
 		fmt.Sprintf("[%s]BlockExecutor.Commit:: commit state by calling proxyApp.Commit", time.Now().Format("15:04:05.000")),
