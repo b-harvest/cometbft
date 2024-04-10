@@ -599,14 +599,13 @@ func (mem *CListMempool) ReapMaxTxs(max int) types.Txs {
 
 // Lock() must be help by the caller during execution.
 func (mem *CListMempool) Update(
-	height int64,
-	txs types.Txs,
+	block *types.Block,
 	txResults []*abci.ExecTxResult,
 	preCheck PreCheckFunc,
 	postCheck PostCheckFunc,
 ) error {
 	// Set height
-	mem.height = height
+	mem.height = block.Height
 	mem.notifiedTxsAvailable = false
 
 	if preCheck != nil {
@@ -616,7 +615,7 @@ func (mem *CListMempool) Update(
 		mem.postCheck = postCheck
 	}
 
-	for i, tx := range txs {
+	for i, tx := range block.Txs {
 		if txResults[i].Code == abci.CodeTypeOK {
 			// Add valid committed tx to the cache (if missing).
 			_ = mem.cache.Push(tx)
@@ -646,11 +645,27 @@ func (mem *CListMempool) Update(
 	// or just notify there're some txs left.
 	if mem.Size() > 0 {
 		if mem.config.Recheck {
-			mem.logger.Debug("recheck txs", "numtxs", mem.Size(), "height", height)
-			mem.recheckTxs()
-			// At this point, mem.txs are being rechecked.
-			// mem.recheckCursor re-scans mem.txs and possibly removes some txs.
-			// Before mem.Reap(), we should wait for mem.recheckCursor to be nil.
+			mem.logger.Debug("recheck txs", "numtxs", mem.Size(), "height", block.Height)
+			res, err := mem.proxyAppConn.BeginRecheckTx(context.TODO(), &abci.RequestBeginRecheckTx{
+				Header: types.TM2PB.Header(&block.Header),
+			})
+			if res.Code == abci.CodeTypeOK && err == nil {
+				mem.recheckTxs()
+				res2, err2 := mem.proxyAppConn.EndRecheckTx(context.TODO(), &abci.RequestEndRecheckTx{Height: block.Height})
+				if res2.Code != abci.CodeTypeOK {
+					return errors.New("the function EndRecheckTxSync does not respond CodeTypeOK")
+				}
+				if err2 != nil {
+					return errors.Join(err2, errors.New("the function EndRecheckTxSync returns an error"))
+				}
+			} else {
+				if res.Code != abci.CodeTypeOK {
+					return errors.New("the function BeginRecheckTxSync does not respond CodeTypeOK")
+				}
+				if err != nil {
+					return errors.Join(err, errors.New("the function BeginRecheckTxSync returns an error"))
+				}
+			}
 		} else {
 			mem.notifyTxsAvailable()
 		}

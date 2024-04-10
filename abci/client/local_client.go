@@ -45,8 +45,10 @@ func (app *localClient) SetResponseCallback(cb Callback) {
 }
 
 func (app *localClient) CheckTxAsync(ctx context.Context, req *types.RequestCheckTx) (*ReqRes, error) {
-	app.mtx.Lock()
-	defer app.mtx.Unlock()
+	// CONTRACT: Application should handle concurrent `CheckTx`
+	// In this abci client layer, we don't protect `CheckTx` with a mutex for concurrency
+	// app.mtx.Lock()
+	// defer app.mtx.Unlock()
 
 	res, err := app.Application.CheckTx(ctx, req)
 	if err != nil {
@@ -93,8 +95,10 @@ func (app *localClient) Info(ctx context.Context, req *types.RequestInfo) (*type
 }
 
 func (app *localClient) CheckTx(ctx context.Context, req *types.RequestCheckTx) (*types.ResponseCheckTx, error) {
-	app.mtx.Lock()
-	defer app.mtx.Unlock()
+	// CONTRACT: Application should handle concurrent `CheckTx`
+	// In this abci client layer, we don't protect `CheckTx` with a mutex for concurrency
+	// app.mtx.Lock()
+	// defer app.mtx.Unlock()
 
 	return app.Application.CheckTx(ctx, req)
 }
@@ -183,4 +187,40 @@ func (app *localClient) FinalizeBlock(ctx context.Context, req *types.RequestFin
 	defer app.mtx.Unlock()
 
 	return app.Application.FinalizeBlock(ctx, req)
+}
+
+func (app *localClient) BeginRecheckTx(ctx context.Context, req *types.RequestBeginRecheckTx) (*types.ResponseBeginRecheckTx, error) {
+	app.mtx.Lock()
+	defer app.mtx.Unlock()
+
+	return app.Application.BeginRecheckTx(ctx, req)
+}
+
+func (app *localClient) EndRecheckTx(ctx context.Context, req *types.RequestEndRecheckTx) (*types.ResponseEndRecheckTx, error) {
+	app.mtx.Lock()
+	defer app.mtx.Unlock()
+
+	return app.Application.EndRecheckTx(ctx, req)
+}
+
+func (app *localClient) BeginRecheckTxAsync(ctx context.Context, req *types.RequestBeginRecheckTx) (*ReqRes, error) {
+	app.mtx.Lock()
+	defer app.mtx.Unlock()
+
+	res, _ := app.Application.BeginRecheckTx(ctx, req)
+	return app.callback(
+		types.ToRequestBeginRecheckTx(req),
+		types.ToResponseBeginRecheckTx(res),
+	), nil
+}
+
+func (app *localClient) EndRecheckTxAsync(ctx context.Context, req *types.RequestEndRecheckTx) (*ReqRes, error) {
+	app.mtx.Lock()
+	defer app.mtx.Unlock()
+
+	res, _ := app.Application.EndRecheckTx(ctx, req)
+	return app.callback(
+		types.ToRequestEndRecheckTx(req),
+		types.ToResponseEndRecheckTx(res),
+	), nil
 }

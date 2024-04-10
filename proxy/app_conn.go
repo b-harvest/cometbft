@@ -31,7 +31,13 @@ type AppConnMempool interface {
 	Error() error
 
 	CheckTx(context.Context, *types.RequestCheckTx) (*types.ResponseCheckTx, error)
+	BeginRecheckTx(context.Context, *types.RequestBeginRecheckTx) (*types.ResponseBeginRecheckTx, error)
+	EndRecheckTx(context.Context, *types.RequestEndRecheckTx) (*types.ResponseEndRecheckTx, error)
+
 	CheckTxAsync(context.Context, *types.RequestCheckTx) (*abcicli.ReqRes, error)
+	BeginRecheckTxAsync(context.Context, *types.RequestBeginRecheckTx) (*abcicli.ReqRes, error)
+	EndRecheckTxAsync(context.Context, *types.RequestEndRecheckTx) (*abcicli.ReqRes, error)
+
 	Flush(context.Context) error
 }
 
@@ -142,9 +148,25 @@ func (app *appConnMempool) CheckTx(ctx context.Context, req *types.RequestCheckT
 	return app.appConn.CheckTx(ctx, req)
 }
 
+func (app *appConnMempool) BeginRecheckTx(ctx context.Context, req *types.RequestBeginRecheckTx) (*types.ResponseBeginRecheckTx, error) {
+	return app.appConn.BeginRecheckTx(ctx, req)
+}
+
+func (app *appConnMempool) EndRecheckTx(ctx context.Context, req *types.RequestEndRecheckTx) (*types.ResponseEndRecheckTx, error) {
+	return app.appConn.EndRecheckTx(ctx, req)
+}
+
 func (app *appConnMempool) CheckTxAsync(ctx context.Context, req *types.RequestCheckTx) (*abcicli.ReqRes, error) {
 	defer addTimeSample(app.metrics.MethodTimingSeconds.With("method", "check_tx", "type", "async"))()
 	return app.appConn.CheckTxAsync(ctx, req)
+}
+
+func (app *appConnMempool) BeginRecheckTxAsync(ctx context.Context, req *types.RequestBeginRecheckTx) (*abcicli.ReqRes, error) {
+	return app.appConn.BeginRecheckTxAsync(ctx, req)
+}
+
+func (app *appConnMempool) EndRecheckTxAsync(ctx context.Context, req *types.RequestEndRecheckTx) (*abcicli.ReqRes, error) {
+	return app.appConn.EndRecheckTxAsync(ctx, req)
 }
 
 //------------------------------------------------

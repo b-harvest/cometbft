@@ -12,7 +12,9 @@ type Application interface {
 	Query(context.Context, *RequestQuery) (*ResponseQuery, error) // Query for state
 
 	// Mempool Connection
-	CheckTx(context.Context, *RequestCheckTx) (*ResponseCheckTx, error) // Validate a tx for the mempool
+	CheckTx(context.Context, *RequestCheckTx) (*ResponseCheckTx, error)                      // Validate a tx for the mempool
+	BeginRecheckTx(context.Context, *RequestBeginRecheckTx) (*ResponseBeginRecheckTx, error) // Signals the beginning of rechecking
+	EndRecheckTx(context.Context, *RequestEndRecheckTx) (*ResponseEndRecheckTx, error)       // Signals the end of rechecking
 
 	// Consensus Connection
 	InitChain(context.Context, *RequestInitChain) (*ResponseInitChain, error) // Initialize blockchain w validators/other info from CometBFT
@@ -116,4 +118,12 @@ func (BaseApplication) FinalizeBlock(_ context.Context, req *RequestFinalizeBloc
 	return &ResponseFinalizeBlock{
 		TxResults: txs,
 	}, nil
+}
+
+func (BaseApplication) BeginRecheckTx(_ context.Context, req *RequestBeginRecheckTx) (*ResponseBeginRecheckTx, error) {
+	return &ResponseBeginRecheckTx{Code: CodeTypeOK}, nil
+}
+
+func (BaseApplication) EndRecheckTx(_ context.Context, req *RequestEndRecheckTx) (*ResponseEndRecheckTx, error) {
+	return &ResponseEndRecheckTx{Code: CodeTypeOK}, nil
 }
