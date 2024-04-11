@@ -21,7 +21,7 @@ func BenchmarkReap(b *testing.B) {
 	for i := 0; i < size; i++ {
 		tx := make([]byte, 8)
 		binary.BigEndian.PutUint64(tx, uint64(i))
-		if err := mp.CheckTx(tx, nil, TxInfo{}); err != nil {
+		if _, err := mp.CheckTxSync(tx, TxInfo{}); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -31,7 +31,7 @@ func BenchmarkReap(b *testing.B) {
 	}
 }
 
-func BenchmarkCheckTx(b *testing.B) {
+func BenchmarkCheckTxSync(b *testing.B) {
 	app := kvstore.NewInMemoryApplication()
 	cc := proxy.NewLocalClientCreator(app)
 	mp, cleanup := newMempoolWithApp(cc)
@@ -47,13 +47,13 @@ func BenchmarkCheckTx(b *testing.B) {
 		binary.BigEndian.PutUint64(tx, uint64(i))
 		b.StartTimer()
 
-		if err := mp.CheckTx(tx, nil, TxInfo{}); err != nil {
+		if _, err := mp.CheckTxSync(tx, TxInfo{}); err != nil {
 			b.Fatal(err)
 		}
 	}
 }
 
-func BenchmarkParallelCheckTx(b *testing.B) {
+func BenchmarkParallelCheckTxSync(b *testing.B) {
 	app := kvstore.NewInMemoryApplication()
 	cc := proxy.NewLocalClientCreator(app)
 	mp, cleanup := newMempoolWithApp(cc)
@@ -71,14 +71,14 @@ func BenchmarkParallelCheckTx(b *testing.B) {
 		for pb.Next() {
 			tx := make([]byte, 8)
 			binary.BigEndian.PutUint64(tx, next())
-			if err := mp.CheckTx(tx, nil, TxInfo{}); err != nil {
+			if _, err := mp.CheckTxSync(tx, TxInfo{}); err != nil {
 				b.Fatal(err)
 			}
 		}
 	})
 }
 
-func BenchmarkCheckDuplicateTx(b *testing.B) {
+func BenchmarkCheckDuplicateTxSync(b *testing.B) {
 	app := kvstore.NewInMemoryApplication()
 	cc := proxy.NewLocalClientCreator(app)
 	mp, cleanup := newMempoolWithApp(cc)
@@ -89,12 +89,70 @@ func BenchmarkCheckDuplicateTx(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		tx := make([]byte, 8)
 		binary.BigEndian.PutUint64(tx, uint64(i))
-		if err := mp.CheckTx(tx, nil, TxInfo{}); err != nil {
+		if _, err := mp.CheckTxSync(tx, TxInfo{}); err != nil {
 			b.Fatal(err)
 		}
 
-		if err := mp.CheckTx(tx, nil, TxInfo{}); err == nil {
+		if _, err := mp.CheckTxSync(tx, TxInfo{}); err == nil {
 			b.Fatal("tx should be duplicate")
 		}
+	}
+}
+
+func BenchmarkCheckTxAsync(b *testing.B) {
+	app := kvstore.NewInMemoryApplication()
+	cc := proxy.NewLocalClientCreator(app)
+	mp, cleanup := newMempoolWithApp(cc)
+	defer cleanup()
+
+	mp.config.Size = 1000000
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		b.StopTimer()
+		tx := make([]byte, 8)
+		binary.BigEndian.PutUint64(tx, uint64(i))
+		b.StartTimer()
+		mp.CheckTxAsync(tx, TxInfo{}, nil, nil)
+	}
+}
+
+func BenchmarkParallelCheckTxAsync(b *testing.B) {
+	app := kvstore.NewInMemoryApplication()
+	cc := proxy.NewLocalClientCreator(app)
+	mp, cleanup := newMempoolWithApp(cc)
+	defer cleanup()
+
+	mp.config.Size = 100000000
+
+	var txcnt uint64
+	next := func() uint64 {
+		return atomic.AddUint64(&txcnt, 1) - 1
+	}
+
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			tx := make([]byte, 8)
+			binary.BigEndian.PutUint64(tx, next())
+			mp.CheckTxAsync(tx, TxInfo{}, nil, nil)
+		}
+	})
+}
+
+func BenchmarkCheckDuplicateTxAsync(b *testing.B) {
+	app := kvstore.NewInMemoryApplication()
+	cc := proxy.NewLocalClientCreator(app)
+	mp, cleanup := newMempoolWithApp(cc)
+	defer cleanup()
+
+	mp.config.Size = 1000000
+
+	for i := 0; i < b.N; i++ {
+		tx := make([]byte, 8)
+		binary.BigEndian.PutUint64(tx, uint64(i))
+		mp.CheckTxAsync(tx, TxInfo{}, nil, nil)
+		mp.CheckTxAsync(tx, TxInfo{}, nil, nil)
 	}
 }

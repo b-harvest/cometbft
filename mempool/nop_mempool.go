@@ -26,9 +26,7 @@ func (*NopMempool) CheckTxSync(types.Tx, TxInfo) (*abci.Response, error) {
 }
 
 // CheckTx always returns an error.
-func (*NopMempool) CheckTxAsync(types.Tx, TxInfo, func(*abci.Response)) error {
-	return errNotAllowed
-}
+func (*NopMempool) CheckTxAsync(types.Tx, TxInfo, func(error), func(*abci.Response)) {}
 
 // RemoveTxByKey always returns an error.
 func (*NopMempool) RemoveTxByKey(types.TxKey) error { return errNotAllowed }

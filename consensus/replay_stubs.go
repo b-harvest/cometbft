@@ -23,8 +23,7 @@ func (emptyMempool) SizeBytes() int64 { return 0 }
 func (emptyMempool) CheckTxSync(types.Tx, mempl.TxInfo) (*abci.Response, error) {
 	return nil, nil
 }
-func (emptyMempool) CheckTxAsync(types.Tx, mempl.TxInfo, func(*abci.Response)) error {
-	return nil
+func (emptyMempool) CheckTxAsync(types.Tx, mempl.TxInfo, func(error), func(*abci.Response)) {
 }
 
 func (txmp emptyMempool) RemoveTxByKey(types.TxKey) error {
