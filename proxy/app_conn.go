@@ -30,9 +30,9 @@ type AppConnMempool interface {
 	SetResponseCallback(abcicli.Callback)
 	Error() error
 
-	CheckTx(context.Context, *types.RequestCheckTx) (*types.ResponseCheckTx, error)
-	BeginRecheckTx(context.Context, *types.RequestBeginRecheckTx) (*types.ResponseBeginRecheckTx, error)
-	EndRecheckTx(context.Context, *types.RequestEndRecheckTx) (*types.ResponseEndRecheckTx, error)
+	CheckTxSync(context.Context, *types.RequestCheckTx) (*types.ResponseCheckTx, error)
+	BeginRecheckTxSync(context.Context, *types.RequestBeginRecheckTx) (*types.ResponseBeginRecheckTx, error)
+	EndRecheckTxSync(context.Context, *types.RequestEndRecheckTx) (*types.ResponseEndRecheckTx, error)
 
 	CheckTxAsync(context.Context, *types.RequestCheckTx) (*abcicli.ReqRes, error)
 	BeginRecheckTxAsync(context.Context, *types.RequestBeginRecheckTx) (*abcicli.ReqRes, error)
@@ -143,16 +143,16 @@ func (app *appConnMempool) Flush(ctx context.Context) error {
 	return app.appConn.Flush(ctx)
 }
 
-func (app *appConnMempool) CheckTx(ctx context.Context, req *types.RequestCheckTx) (*types.ResponseCheckTx, error) {
+func (app *appConnMempool) CheckTxSync(ctx context.Context, req *types.RequestCheckTx) (*types.ResponseCheckTx, error) {
 	defer addTimeSample(app.metrics.MethodTimingSeconds.With("method", "check_tx", "type", "sync"))()
-	return app.appConn.CheckTx(ctx, req)
+	return app.appConn.CheckTxSync(ctx, req)
 }
 
-func (app *appConnMempool) BeginRecheckTx(ctx context.Context, req *types.RequestBeginRecheckTx) (*types.ResponseBeginRecheckTx, error) {
+func (app *appConnMempool) BeginRecheckTxSync(ctx context.Context, req *types.RequestBeginRecheckTx) (*types.ResponseBeginRecheckTx, error) {
 	return app.appConn.BeginRecheckTx(ctx, req)
 }
 
-func (app *appConnMempool) EndRecheckTx(ctx context.Context, req *types.RequestEndRecheckTx) (*types.ResponseEndRecheckTx, error) {
+func (app *appConnMempool) EndRecheckTxSync(ctx context.Context, req *types.RequestEndRecheckTx) (*types.ResponseEndRecheckTx, error) {
 	return app.appConn.EndRecheckTx(ctx, req)
 }
 

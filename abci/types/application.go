@@ -2,6 +2,8 @@ package types
 
 import "context"
 
+type CheckTxCallback func(*ResponseCheckTx) // ! context가 추가 되어야 하는가?
+
 //go:generate ../../scripts/mockery_generate.sh Application
 
 // Application is an interface that enables any finite, deterministic state machine
@@ -12,7 +14,8 @@ type Application interface {
 	Query(context.Context, *RequestQuery) (*ResponseQuery, error) // Query for state
 
 	// Mempool Connection
-	CheckTx(context.Context, *RequestCheckTx) (*ResponseCheckTx, error)                      // Validate a tx for the mempool
+	CheckTxSyncForApp(context.Context, *RequestCheckTx) (*ResponseCheckTx, error)            // Validate a tx for the mempool
+	CheckTxAsyncForApp(context.Context, *RequestCheckTx, CheckTxCallback)                    // Asynchronously validate a tx for the mempool
 	BeginRecheckTx(context.Context, *RequestBeginRecheckTx) (*ResponseBeginRecheckTx, error) // Signals the beginning of rechecking
 	EndRecheckTx(context.Context, *RequestEndRecheckTx) (*ResponseEndRecheckTx, error)       // Signals the end of rechecking
 
@@ -49,10 +52,6 @@ func NewBaseApplication() *BaseApplication {
 
 func (BaseApplication) Info(context.Context, *RequestInfo) (*ResponseInfo, error) {
 	return &ResponseInfo{}, nil
-}
-
-func (BaseApplication) CheckTx(context.Context, *RequestCheckTx) (*ResponseCheckTx, error) {
-	return &ResponseCheckTx{Code: CodeTypeOK}, nil
 }
 
 func (BaseApplication) Commit(context.Context, *RequestCommit) (*ResponseCommit, error) {
@@ -120,10 +119,18 @@ func (BaseApplication) FinalizeBlock(_ context.Context, req *RequestFinalizeBloc
 	}, nil
 }
 
-func (BaseApplication) BeginRecheckTx(_ context.Context, req *RequestBeginRecheckTx) (*ResponseBeginRecheckTx, error) {
+func (BaseApplication) CheckTxSyncForApp(context.Context, *RequestCheckTx) (*ResponseCheckTx, error) {
+	return &ResponseCheckTx{Code: CodeTypeOK}, nil
+}
+
+func (BaseApplication) CheckTxAsyncForApp(_ context.Context, _ *RequestCheckTx, callback CheckTxCallback) {
+	callback(&ResponseCheckTx{Code: CodeTypeOK})
+}
+
+func (BaseApplication) BeginRecheckTx(context.Context, *RequestBeginRecheckTx) (*ResponseBeginRecheckTx, error) {
 	return &ResponseBeginRecheckTx{Code: CodeTypeOK}, nil
 }
 
-func (BaseApplication) EndRecheckTx(_ context.Context, req *RequestEndRecheckTx) (*ResponseEndRecheckTx, error) {
+func (BaseApplication) EndRecheckTx(context.Context, *RequestEndRecheckTx) (*ResponseEndRecheckTx, error) {
 	return &ResponseEndRecheckTx{Code: CodeTypeOK}, nil
 }

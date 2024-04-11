@@ -20,7 +20,7 @@ import (
 // CheckTx nor transaction results.
 // More: https://docs.cometbft.com/v0.38.x/rpc/#/Tx/broadcast_tx_async
 func (env *Environment) BroadcastTxAsync(_ *rpctypes.Context, tx types.Tx) (*ctypes.ResultBroadcastTx, error) {
-	err := env.Mempool.CheckTx(tx, nil, mempl.TxInfo{})
+	err := env.Mempool.CheckTxAsync(tx, mempl.TxInfo{}, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -31,29 +31,18 @@ func (env *Environment) BroadcastTxAsync(_ *rpctypes.Context, tx types.Tx) (*cty
 // the transaction result.
 // More: https://docs.cometbft.com/v0.38.x/rpc/#/Tx/broadcast_tx_sync
 func (env *Environment) BroadcastTxSync(ctx *rpctypes.Context, tx types.Tx) (*ctypes.ResultBroadcastTx, error) {
-	resCh := make(chan *abci.ResponseCheckTx, 1)
-	err := env.Mempool.CheckTx(tx, func(res *abci.ResponseCheckTx) {
-		select {
-		case <-ctx.Context().Done():
-		case resCh <- res:
-		}
-	}, mempl.TxInfo{})
+	res, err := env.Mempool.CheckTxSync(tx, mempl.TxInfo{})
 	if err != nil {
 		return nil, err
 	}
-
-	select {
-	case <-ctx.Context().Done():
-		return nil, fmt.Errorf("broadcast confirmation not received: %w", ctx.Context().Err())
-	case res := <-resCh:
-		return &ctypes.ResultBroadcastTx{
-			Code:      res.Code,
-			Data:      res.Data,
-			Log:       res.Log,
-			Codespace: res.Codespace,
-			Hash:      tx.Hash(),
-		}, nil
-	}
+	r := res.GetCheckTx()
+	return &ctypes.ResultBroadcastTx{
+		Code:      r.Code,
+		Data:      r.Data,
+		Log:       r.Log,
+		Codespace: r.Codespace,
+		Hash:      tx.Hash(),
+	}, nil
 }
 
 // BroadcastTxCommit returns with the responses from CheckTx and ExecTxResult.
@@ -84,62 +73,52 @@ func (env *Environment) BroadcastTxCommit(ctx *rpctypes.Context, tx types.Tx) (*
 	}()
 
 	// Broadcast tx and wait for CheckTx result
-	checkTxResCh := make(chan *abci.ResponseCheckTx, 1)
-	err = env.Mempool.CheckTx(tx, func(res *abci.ResponseCheckTx) {
-		select {
-		case <-ctx.Context().Done():
-		case checkTxResCh <- res:
-		}
-	}, mempl.TxInfo{})
+	checkTxResMsg, err := env.Mempool.CheckTxSync(tx, mempl.TxInfo{})
 	if err != nil {
 		env.Logger.Error("Error on broadcastTxCommit", "err", err)
 		return nil, fmt.Errorf("error on broadcastTxCommit: %v", err)
 	}
-	select {
-	case <-ctx.Context().Done():
-		return nil, fmt.Errorf("broadcast confirmation not received: %w", ctx.Context().Err())
-	case checkTxRes := <-checkTxResCh:
-		if checkTxRes.Code != abci.CodeTypeOK {
-			return &ctypes.ResultBroadcastTxCommit{
-				CheckTx:  *checkTxRes,
-				TxResult: abci.ExecTxResult{},
-				Hash:     tx.Hash(),
-			}, nil
-		}
+	checkTxRes := checkTxResMsg.GetCheckTx()
+	if checkTxRes.Code != abci.CodeTypeOK {
+		return &ctypes.ResultBroadcastTxCommit{
+			CheckTx:  *checkTxRes,
+			TxResult: abci.ExecTxResult{},
+			Hash:     tx.Hash(),
+		}, nil
+	}
 
-		// Wait for the tx to be included in a block or timeout.
-		select {
-		case msg := <-txSub.Out(): // The tx was included in a block.
-			txResultEvent := msg.Data().(types.EventDataTx)
-			return &ctypes.ResultBroadcastTxCommit{
-				CheckTx:  *checkTxRes,
-				TxResult: txResultEvent.Result,
-				Hash:     tx.Hash(),
-				Height:   txResultEvent.Height,
-			}, nil
-		case <-txSub.Canceled():
-			var reason string
-			if txSub.Err() == nil {
-				reason = "CometBFT exited"
-			} else {
-				reason = txSub.Err().Error()
-			}
-			err = fmt.Errorf("txSub was canceled (reason: %s)", reason)
-			env.Logger.Error("Error on broadcastTxCommit", "err", err)
-			return &ctypes.ResultBroadcastTxCommit{
-				CheckTx:  *checkTxRes,
-				TxResult: abci.ExecTxResult{},
-				Hash:     tx.Hash(),
-			}, err
-		case <-time.After(env.Config.TimeoutBroadcastTxCommit):
-			err = errors.New("timed out waiting for tx to be included in a block")
-			env.Logger.Error("Error on broadcastTxCommit", "err", err)
-			return &ctypes.ResultBroadcastTxCommit{
-				CheckTx:  *checkTxRes,
-				TxResult: abci.ExecTxResult{},
-				Hash:     tx.Hash(),
-			}, err
+	// Wait for the tx to be included in a block or timeout.
+	select {
+	case msg := <-txSub.Out(): // The tx was included in a block.
+		txResultEvent := msg.Data().(types.EventDataTx)
+		return &ctypes.ResultBroadcastTxCommit{
+			CheckTx:  *checkTxRes,
+			TxResult: txResultEvent.Result,
+			Hash:     tx.Hash(),
+			Height:   txResultEvent.Height,
+		}, nil
+	case <-txSub.Canceled():
+		var reason string
+		if txSub.Err() == nil {
+			reason = "CometBFT exited"
+		} else {
+			reason = txSub.Err().Error()
 		}
+		err = fmt.Errorf("txSub was canceled (reason: %s)", reason)
+		env.Logger.Error("Error on broadcastTxCommit", "err", err)
+		return &ctypes.ResultBroadcastTxCommit{
+			CheckTx:  *checkTxRes,
+			TxResult: abci.ExecTxResult{},
+			Hash:     tx.Hash(),
+		}, err
+	case <-time.After(env.Config.TimeoutBroadcastTxCommit):
+		err = errors.New("timed out waiting for tx to be included in a block")
+		env.Logger.Error("Error on broadcastTxCommit", "err", err)
+		return &ctypes.ResultBroadcastTxCommit{
+			CheckTx:  *checkTxRes,
+			TxResult: abci.ExecTxResult{},
+			Hash:     tx.Hash(),
+		}, err
 	}
 }
 
@@ -173,7 +152,7 @@ func (env *Environment) NumUnconfirmedTxs(*rpctypes.Context) (*ctypes.ResultUnco
 // be added to the mempool either.
 // More: https://docs.cometbft.com/v0.38.x/rpc/#/Tx/check_tx
 func (env *Environment) CheckTx(_ *rpctypes.Context, tx types.Tx) (*ctypes.ResultCheckTx, error) {
-	res, err := env.ProxyAppMempool.CheckTx(context.TODO(), &abci.RequestCheckTx{Tx: tx})
+	res, err := env.ProxyAppMempool.CheckTxSync(context.TODO(), &abci.RequestCheckTx{Tx: tx})
 	if err != nil {
 		return nil, err
 	}
