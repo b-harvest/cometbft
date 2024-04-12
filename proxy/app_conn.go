@@ -149,11 +149,11 @@ func (app *appConnMempool) CheckTxSync(ctx context.Context, req *types.RequestCh
 }
 
 func (app *appConnMempool) BeginRecheckTxSync(ctx context.Context, req *types.RequestBeginRecheckTx) (*types.ResponseBeginRecheckTx, error) {
-	return app.appConn.BeginRecheckTx(ctx, req)
+	return app.appConn.BeginRecheckTxSync(ctx, req)
 }
 
 func (app *appConnMempool) EndRecheckTxSync(ctx context.Context, req *types.RequestEndRecheckTx) (*types.ResponseEndRecheckTx, error) {
-	return app.appConn.EndRecheckTx(ctx, req)
+	return app.appConn.EndRecheckTxSync(ctx, req)
 }
 
 func (app *appConnMempool) CheckTxAsync(ctx context.Context, req *types.RequestCheckTx) (*abcicli.ReqRes, error) {
