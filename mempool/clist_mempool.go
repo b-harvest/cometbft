@@ -516,7 +516,7 @@ func (mem *CListMempool) resCbRecheck(req *abci.Request, res *abci.Response) {
 		}
 
 		var postCheckErr error
-		if r.CheckTx.Code != abci.CodeTypeOK {
+		if r.CheckTx.Code == abci.CodeTypeOK {
 			if mem.postCheck == nil {
 				return
 			}
@@ -687,7 +687,9 @@ func (mem *CListMempool) Update(
 				}
 			}
 		}
+	}
 
+	if mem.Size() > 0 {
 		mem.notifyTxsAvailable()
 	}
 
