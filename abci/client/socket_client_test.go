@@ -200,9 +200,24 @@ type blockedABCIApplication struct {
 	types.BaseApplication
 }
 
-func (b blockedABCIApplication) CheckTxAsync(ctx context.Context, r *types.RequestCheckTx) (*types.ResponseCheckTx, error) {
+func (b blockedABCIApplication) CheckTxAsync(ctx context.Context, r *types.RequestCheckTx) (*abcicli.ReqRes, error) {
 	b.wg.Wait()
-	return b.BaseApplication.CheckTx(ctx, r)
+
+	req := types.ToRequestCheckTx(r)
+	reqRes := abcicli.NewReqRes(req)
+
+	b.BaseApplication.CheckTxAsyncForApp(ctx, r, func(r *types.ResponseCheckTx) {
+		res := types.ToResponseCheckTx(r)
+		reqRes.Response = res
+		reqRes.Done()
+
+		// Notify reqRes listener if set
+		if cb := reqRes.GetCallback(); cb != nil {
+			cb(res)
+		}
+	})
+
+	return reqRes, nil
 }
 
 // TestCallbackInvokedWhenSetEarly ensures that the callback is invoked when

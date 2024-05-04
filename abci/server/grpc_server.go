@@ -74,3 +74,7 @@ func (app *gRPCApplication) Echo(_ context.Context, req *types.RequestEcho) (*ty
 func (app *gRPCApplication) Flush(context.Context, *types.RequestFlush) (*types.ResponseFlush, error) {
 	return &types.ResponseFlush{}, nil
 }
+
+func (app *gRPCApplication) CheckTx(ctx context.Context, req *types.RequestCheckTx) (*types.ResponseCheckTx, error) {
+	return app.CheckTxSyncForApp(ctx, req)
+}

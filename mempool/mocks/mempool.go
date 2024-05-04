@@ -16,18 +16,35 @@ type Mempool struct {
 	mock.Mock
 }
 
-// CheckTx provides a mock function with given fields: tx, callback, txInfo
-func (_m *Mempool) CheckTx(tx types.Tx, callback func(*abcitypes.ResponseCheckTx), txInfo mempool.TxInfo) error {
-	ret := _m.Called(tx, callback, txInfo)
+// CheckTxAsync provides a mock function with given fields: tx, txInfo, prepareCb, checkTxCb
+func (_m *Mempool) CheckTxAsync(tx types.Tx, txInfo mempool.TxInfo, prepareCb func(error), checkTxCb func(*abcitypes.Response)) {
+	_m.Called(tx, txInfo, prepareCb, checkTxCb)
+}
 
-	var r0 error
-	if rf, ok := ret.Get(0).(func(types.Tx, func(*abcitypes.ResponseCheckTx), mempool.TxInfo) error); ok {
-		r0 = rf(tx, callback, txInfo)
+// CheckTxSync provides a mock function with given fields: tx, txInfo
+func (_m *Mempool) CheckTxSync(tx types.Tx, txInfo mempool.TxInfo) (*abcitypes.Response, error) {
+	ret := _m.Called(tx, txInfo)
+
+	var r0 *abcitypes.Response
+	var r1 error
+	if rf, ok := ret.Get(0).(func(types.Tx, mempool.TxInfo) (*abcitypes.Response, error)); ok {
+		return rf(tx, txInfo)
+	}
+	if rf, ok := ret.Get(0).(func(types.Tx, mempool.TxInfo) *abcitypes.Response); ok {
+		r0 = rf(tx, txInfo)
 	} else {
-		r0 = ret.Error(0)
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*abcitypes.Response)
+		}
 	}
 
-	return r0
+	if rf, ok := ret.Get(1).(func(types.Tx, mempool.TxInfo) error); ok {
+		r1 = rf(tx, txInfo)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
 }
 
 // EnableTxsAvailable provides a mock function with given fields:
@@ -154,13 +171,13 @@ func (_m *Mempool) Unlock() {
 	_m.Called()
 }
 
-// Update provides a mock function with given fields: blockHeight, blockTxs, deliverTxResponses, newPreFn, newPostFn
-func (_m *Mempool) Update(blockHeight int64, blockTxs types.Txs, deliverTxResponses []*abcitypes.ExecTxResult, newPreFn mempool.PreCheckFunc, newPostFn mempool.PostCheckFunc) error {
-	ret := _m.Called(blockHeight, blockTxs, deliverTxResponses, newPreFn, newPostFn)
+// Update provides a mock function with given fields: block, deliverTxResponses, newPreFn, newPostFn
+func (_m *Mempool) Update(block *types.Block, deliverTxResponses []*abcitypes.ExecTxResult, newPreFn mempool.PreCheckFunc, newPostFn mempool.PostCheckFunc) error {
+	ret := _m.Called(block, deliverTxResponses, newPreFn, newPostFn)
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(int64, types.Txs, []*abcitypes.ExecTxResult, mempool.PreCheckFunc, mempool.PostCheckFunc) error); ok {
-		r0 = rf(blockHeight, blockTxs, deliverTxResponses, newPreFn, newPostFn)
+	if rf, ok := ret.Get(0).(func(*types.Block, []*abcitypes.ExecTxResult, mempool.PreCheckFunc, mempool.PostCheckFunc) error); ok {
+		r0 = rf(block, deliverTxResponses, newPreFn, newPostFn)
 	} else {
 		r0 = ret.Error(0)
 	}

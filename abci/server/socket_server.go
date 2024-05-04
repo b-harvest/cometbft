@@ -223,7 +223,7 @@ func (s *SocketServer) handleRequest(ctx context.Context, req *types.Request) (*
 		}
 		return types.ToResponseInfo(res), nil
 	case *types.Request_CheckTx:
-		res, err := s.app.CheckTx(ctx, r.CheckTx)
+		res, err := s.app.CheckTxSyncForApp(ctx, r.CheckTx)
 		if err != nil {
 			return nil, err
 		}

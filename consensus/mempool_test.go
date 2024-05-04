@@ -110,7 +110,7 @@ func TestMempoolProgressInHigherRound(t *testing.T) {
 func deliverTxsRange(t *testing.T, cs *State, start, end int) {
 	// Deliver some txs.
 	for i := start; i < end; i++ {
-		err := assertMempool(cs.txNotifier).CheckTx(kvstore.NewTx(fmt.Sprintf("%d", i), "true"), nil, mempl.TxInfo{})
+		_, err := assertMempool(cs.txNotifier).CheckTxSync(kvstore.NewTx(fmt.Sprintf("%d", i), "true"), mempl.TxInfo{})
 		require.NoError(t, err)
 	}
 }
@@ -159,24 +159,35 @@ func TestMempoolRmBadTx(t *testing.T) {
 	_, err = app.Commit(context.Background(), &abci.RequestCommit{})
 	require.NoError(t, err)
 
-	emptyMempoolCh := make(chan struct{})
+	resBeginRecheckTx, err := app.BeginRecheckTx(context.Background(), &abci.RequestBeginRecheckTx{})
+	require.NoError(t, err)
+	assert.Equal(t, abci.CodeTypeOK, resBeginRecheckTx.Code)
+
+	// There is no tx to recheck
+
+	resEndRecheckTx, err := app.EndRecheckTx(context.Background(), &abci.RequestEndRecheckTx{})
+	require.NoError(t, err)
+	assert.Equal(t, abci.CodeTypeOK, resEndRecheckTx.Code)
+
+	checkTxErrorCh := make(chan error)
 	checkTxRespCh := make(chan struct{})
+	emptyMempoolCh := make(chan struct{})
 	go func() {
 		// Try to send the tx through the mempool.
 		// CheckTx should not err, but the app should return a bad abci code
 		// and the tx should get removed from the pool
 		invalidTx := []byte("invalidTx")
-		err := assertMempool(cs.txNotifier).CheckTx(invalidTx, func(r *abci.ResponseCheckTx) {
-			if r.Code != kvstore.CodeTypeInvalidTxFormat {
+		assertMempool(cs.txNotifier).CheckTxAsync(invalidTx, mempl.TxInfo{}, func(err error) {
+			checkTxErrorCh <- err
+		}, func(r *abci.Response) {
+			if r.GetCheckTx().Code != kvstore.CodeTypeInvalidTxFormat {
 				t.Errorf("expected checktx to return invalid format, got %v", r)
 				return
 			}
 			checkTxRespCh <- struct{}{}
-		}, mempl.TxInfo{})
-		if err != nil {
-			t.Errorf("error after CheckTx: %v", err)
-			return
-		}
+		})
+
+		<-checkTxErrorCh
 
 		// check for the tx
 		for {

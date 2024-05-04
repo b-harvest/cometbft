@@ -377,10 +377,13 @@ func TestBroadcastTxCommit(t *testing.T) {
 func TestUnconfirmedTxs(t *testing.T) {
 	_, _, tx := MakeTxKV()
 
-	ch := make(chan *abci.ResponseCheckTx, 1)
+	ch := make(chan *abci.Response, 1)
 	mempool := node.Mempool()
-	err := mempool.CheckTx(tx, func(resp *abci.ResponseCheckTx) { ch <- resp }, mempl.TxInfo{})
-	require.NoError(t, err)
+	mempool.CheckTxAsync(tx, mempl.TxInfo{}, func(err error) {
+		require.NoError(t, err)
+	}, func(resp *abci.Response) {
+		ch <- resp
+	})
 
 	// wait for tx to arrive in mempoool.
 	select {
@@ -407,10 +410,13 @@ func TestUnconfirmedTxs(t *testing.T) {
 func TestNumUnconfirmedTxs(t *testing.T) {
 	_, _, tx := MakeTxKV()
 
-	ch := make(chan *abci.ResponseCheckTx, 1)
+	ch := make(chan *abci.Response, 1)
 	mempool := node.Mempool()
-	err := mempool.CheckTx(tx, func(resp *abci.ResponseCheckTx) { ch <- resp }, mempl.TxInfo{})
-	require.NoError(t, err)
+	mempool.CheckTxAsync(tx, mempl.TxInfo{}, func(err error) {
+		require.NoError(t, err)
+	}, func(resp *abci.Response) {
+		ch <- resp
+	})
 
 	// wait for tx to arrive in mempoool.
 	select {

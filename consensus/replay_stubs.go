@@ -20,8 +20,10 @@ func (emptyMempool) Lock()            {}
 func (emptyMempool) Unlock()          {}
 func (emptyMempool) Size() int        { return 0 }
 func (emptyMempool) SizeBytes() int64 { return 0 }
-func (emptyMempool) CheckTx(types.Tx, func(*abci.ResponseCheckTx), mempl.TxInfo) error {
-	return nil
+func (emptyMempool) CheckTxSync(types.Tx, mempl.TxInfo) (*abci.Response, error) {
+	return nil, nil
+}
+func (emptyMempool) CheckTxAsync(types.Tx, mempl.TxInfo, func(error), func(*abci.Response)) {
 }
 
 func (txmp emptyMempool) RemoveTxByKey(types.TxKey) error {
@@ -31,8 +33,7 @@ func (txmp emptyMempool) RemoveTxByKey(types.TxKey) error {
 func (emptyMempool) ReapMaxBytesMaxGas(int64, int64) types.Txs { return types.Txs{} }
 func (emptyMempool) ReapMaxTxs(int) types.Txs                  { return types.Txs{} }
 func (emptyMempool) Update(
-	int64,
-	types.Txs,
+	*types.Block,
 	[]*abci.ExecTxResult,
 	mempl.PreCheckFunc,
 	mempl.PostCheckFunc,

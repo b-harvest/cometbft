@@ -15,7 +15,7 @@ func TestNopMempool_Basic(t *testing.T) {
 	assert.Equal(t, 0, mem.Size())
 	assert.Equal(t, int64(0), mem.SizeBytes())
 
-	err := mem.CheckTx(tx, nil, TxInfo{})
+	_, err := mem.CheckTxSync(tx, TxInfo{})
 	assert.Equal(t, errNotAllowed, err)
 
 	err = mem.RemoveTxByKey(tx.Key())
@@ -30,7 +30,7 @@ func TestNopMempool_Basic(t *testing.T) {
 	err = mem.FlushAppConn()
 	assert.NoError(t, err)
 
-	err = mem.Update(0, nil, nil, nil, nil)
+	err = mem.Update(newTestBlock(0, nil), nil, nil, nil)
 	assert.NoError(t, err)
 
 	txsAvailable := mem.TxsAvailable()
