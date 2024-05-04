@@ -465,7 +465,7 @@ func (cs *State) OpenWAL(walFile string) (WAL, error) {
 	return wal, nil
 }
 
-//------------------------------------------------------------
+// ------------------------------------------------------------
 // Public interface for passing messages into the consensus state, possibly causing a state transition.
 // If peerID == "", the msg is considered internal.
 // Messages are added to the appropriate queue (peer or internal).
@@ -530,7 +530,7 @@ func (cs *State) SetProposalAndBlock(
 	return nil
 }
 
-//------------------------------------------------------------
+// ------------------------------------------------------------
 // internal functions for managing the state
 
 func (cs *State) updateHeight(height int64) {
@@ -555,6 +555,13 @@ func (cs *State) updateRoundStep(round int32, step cstypes.RoundStepType) {
 func (cs *State) scheduleRound0(rs *cstypes.RoundState) {
 	// cs.Logger.Info("scheduleRound0", "now", cmttime.Now(), "startTime", cs.StartTime)
 	sleepDuration := rs.StartTime.Sub(cmttime.Now())
+	tFormat := "15:04:05.000"
+	cs.Logger.Info(
+		fmt.Sprintf("[%s]scheduleRound0", time.Now().Format(tFormat)),
+		"canonicalNow", cmttime.Now().Format(tFormat),
+		"state.startTime", cs.StartTime.Format(tFormat),
+		"sleepDuration", sleepDuration,
+	)
 	cs.scheduleTimeout(sleepDuration, rs.Height, 0, cstypes.RoundStepNewHeight)
 }
 
@@ -772,7 +779,7 @@ func (cs *State) newStep() {
 	}
 }
 
-//-----------------------------------------
+// -----------------------------------------
 // the main go routines
 
 // receiveRoutine handles messages which may cause state transitions.
@@ -1036,7 +1043,7 @@ func (cs *State) handleTxsAvailable() {
 	}
 }
 
-//-----------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 // State functions
 // Used internally by handleTimeout and handleMsg to make state transitions
 
@@ -1779,6 +1786,7 @@ func (cs *State) finalizeCommit(height int64) {
 		panic(fmt.Sprintf("failed to apply block; error %v", err))
 	}
 
+	logger.Info(fmt.Sprintf("[%s]done apply block", time.Now().Format("15:04:05.000")), "height", block.Height, "app_hash", block.AppHash)
 	fail.Fail() // XXX
 
 	// must be called before we update state
@@ -1786,7 +1794,6 @@ func (cs *State) finalizeCommit(height int64) {
 
 	// NewHeightStep!
 	cs.updateToState(stateCopy)
-
 	fail.Fail() // XXX
 
 	// Private validator might have changed it's key pair => refetch pubkey.
@@ -1892,7 +1899,7 @@ func (cs *State) recordMetrics(height int64, block *types.Block) {
 	cs.metrics.CommittedHeight.Set(float64(block.Height))
 }
 
-//-----------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 
 func (cs *State) defaultSetProposal(proposal *types.Proposal) error {
 	// Already have one
@@ -2006,7 +2013,13 @@ func (cs *State) addProposalBlockPart(msg *BlockPartMessage, peerID p2p.ID) (add
 		cs.ProposalBlock = block
 
 		// NOTE: it's possible to receive complete proposal blocks for future rounds without having the proposal
-		cs.Logger.Info("received complete proposal block", "height", cs.ProposalBlock.Height, "hash", cs.ProposalBlock.Hash())
+		// cs.Logger.Info("received complete proposal block", "height", cs.ProposalBlock.Height, "hash", cs.ProposalBlock.Hash())
+		cs.Logger.Info(
+			fmt.Sprintf("[%s]received complete proposal block", time.Now().Format("15:04:05.000")),
+			"height", cs.ProposalBlock.Height,
+			"hash", cs.ProposalBlock.Hash(),
+			"blockTime", cs.ProposalBlock.Time,
+		)
 
 		if err := cs.eventBus.PublishEventCompleteProposal(cs.CompleteProposalEvent()); err != nil {
 			cs.Logger.Error("failed publishing event complete proposal", "err", err)
@@ -2058,7 +2071,7 @@ func (cs *State) tryAddVote(vote *types.Vote, peerID p2p.ID) (bool, error) {
 		// If the vote height is off, we'll just ignore it,
 		// But if it's a conflicting sig, add it to the cs.evpool.
 		// If it's otherwise invalid, punish peer.
-		//nolint: gocritic
+		// nolint: gocritic
 		if voteErr, ok := err.(*types.ErrVoteConflictingVotes); ok {
 			if cs.privValidatorPubKey == nil {
 				return false, errPubKeyIsNotSet
@@ -2517,7 +2530,7 @@ func (cs *State) calculatePrevoteMessageDelayMetrics() {
 	}
 }
 
-//---------------------------------------------------------
+// ---------------------------------------------------------
 
 func CompareHRS(h1 int64, r1 int32, s1 cstypes.RoundStepType, h2 int64, r2 int32, s2 cstypes.RoundStepType) int {
 	if h1 < h2 {
