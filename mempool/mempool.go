@@ -32,7 +32,8 @@ const (
 type Mempool interface {
 	// CheckTx executes a new transaction against the application to determine
 	// its validity and whether it should be added to the mempool.
-	CheckTx(tx types.Tx, callback func(*abci.ResponseCheckTx), txInfo TxInfo) error
+	CheckTxSync(tx types.Tx, txInfo TxInfo) (*abci.Response, error)
+	CheckTxAsync(tx types.Tx, txInfo TxInfo, prepareCb func(error), checkTxCb func(*abci.Response))
 
 	// RemoveTxByKey removes a transaction, identified by its key,
 	// from the mempool.
@@ -65,8 +66,7 @@ type Mempool interface {
 	// 1. This should be called *after* block is committed by consensus.
 	// 2. Lock/Unlock must be managed by the caller.
 	Update(
-		blockHeight int64,
-		blockTxs types.Txs,
+		block *types.Block,
 		deliverTxResponses []*abci.ExecTxResult,
 		newPreFn PreCheckFunc,
 		newPostFn PostCheckFunc,

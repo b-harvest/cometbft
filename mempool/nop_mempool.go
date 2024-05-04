@@ -21,9 +21,12 @@ var errNotAllowed = errors.New("not allowed with `nop` mempool")
 var _ Mempool = &NopMempool{}
 
 // CheckTx always returns an error.
-func (*NopMempool) CheckTx(types.Tx, func(*abci.ResponseCheckTx), TxInfo) error {
-	return errNotAllowed
+func (*NopMempool) CheckTxSync(types.Tx, TxInfo) (*abci.Response, error) {
+	return nil, errNotAllowed
 }
+
+// CheckTx always returns an error.
+func (*NopMempool) CheckTxAsync(types.Tx, TxInfo, func(error), func(*abci.Response)) {}
 
 // RemoveTxByKey always returns an error.
 func (*NopMempool) RemoveTxByKey(types.TxKey) error { return errNotAllowed }
@@ -42,8 +45,7 @@ func (*NopMempool) Unlock() {}
 
 // Update does nothing.
 func (*NopMempool) Update(
-	int64,
-	types.Txs,
+	*types.Block,
 	[]*abci.ExecTxResult,
 	PreCheckFunc,
 	PostCheckFunc,

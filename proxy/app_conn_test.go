@@ -44,7 +44,7 @@ func TestEcho(t *testing.T) {
 	t.Log("Connected")
 
 	for i := 0; i < 1000; i++ {
-		_, err = proxy.CheckTx(context.Background(), &abci.RequestCheckTx{Tx: []byte(fmt.Sprintf("echo-%v", i))})
+		_, err = proxy.CheckTxSync(context.Background(), &abci.RequestCheckTx{Tx: []byte(fmt.Sprintf("echo-%v", i))})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -86,7 +86,7 @@ func BenchmarkEcho(b *testing.B) {
 	b.StartTimer() // Start benchmarking tests
 
 	for i := 0; i < b.N; i++ {
-		_, err = proxy.CheckTx(context.Background(), &abci.RequestCheckTx{Tx: []byte("hello")})
+		_, err = proxy.CheckTxSync(context.Background(), &abci.RequestCheckTx{Tx: []byte("hello")})
 		if err != nil {
 			b.Error(err)
 		}

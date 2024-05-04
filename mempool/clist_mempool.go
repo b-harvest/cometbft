@@ -1,7 +1,6 @@
 package mempool
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"sync"
@@ -39,14 +38,10 @@ type CListMempool struct {
 	preCheck  PreCheckFunc
 	postCheck PostCheckFunc
 
+	chReqCheckTx chan *requestCheckTxAsync
+
 	txs          *clist.CList // concurrent linked-list of good txs
 	proxyAppConn proxy.AppConnMempool
-
-	// Track whether we're rechecking txs.
-	// These are not protected by a mutex and are expected to be mutated in
-	// serial (ie. by abci responses which are called in serial).
-	recheckCursor *clist.CElement // next expected response
-	recheckEnd    *clist.CElement // re-checking stops here
 
 	// Map for quick access to txs to record sender in CheckTx.
 	// txsMap: txKey -> CElement
@@ -58,6 +53,13 @@ type CListMempool struct {
 
 	logger  log.Logger
 	metrics *Metrics
+}
+
+type requestCheckTxAsync struct {
+	tx        types.Tx
+	txInfo    TxInfo
+	prepareCb func(error)
+	checkTxCb func(*abci.Response)
 }
 
 var _ Mempool = &CListMempool{}
@@ -74,14 +76,13 @@ func NewCListMempool(
 	options ...CListMempoolOption,
 ) *CListMempool {
 	mp := &CListMempool{
-		config:        cfg,
-		proxyAppConn:  proxyAppConn,
-		txs:           clist.New(),
-		height:        height,
-		recheckCursor: nil,
-		recheckEnd:    nil,
-		logger:        log.NewNopLogger(),
-		metrics:       NopMetrics(),
+		config:       cfg,
+		proxyAppConn: proxyAppConn,
+		txs:          clist.New(),
+		height:       height,
+		chReqCheckTx: make(chan *requestCheckTxAsync, cfg.Size),
+		logger:       log.NewNopLogger(),
+		metrics:      NopMetrics(),
 	}
 
 	if cfg.CacheSize > 0 {
@@ -89,13 +90,12 @@ func NewCListMempool(
 	} else {
 		mp.cache = NopTxCache{}
 	}
-
 	proxyAppConn.SetResponseCallback(mp.globalCb)
 
 	for _, option := range options {
 		option(mp)
 	}
-
+	go mp.checkTxAsyncReactor()
 	return mp
 }
 
@@ -209,6 +209,76 @@ func (mem *CListMempool) TxsWaitChan() <-chan struct{} {
 }
 
 // It blocks if we're waiting on Update() or Reap().
+// Safe for concurrent use by multiple goroutines.
+func (mem *CListMempool) CheckTxSync(tx types.Tx, txInfo TxInfo) (res *abci.Response, err error) {
+	mem.updateMtx.RLock()
+	// use defer to unlock mutex because application (*local client*) might panic
+	defer mem.updateMtx.RUnlock()
+
+	if err = mem.prepareCheckTx(tx, txInfo); err != nil {
+		return res, err
+	}
+
+	// CONTRACT: `app.CheckTxSync()` should check whether `GasWanted` is valid (0 <= GasWanted <= block.masGas)
+	var r *abci.ResponseCheckTx
+	r, err = mem.proxyAppConn.CheckTxSync(context.TODO(), &abci.RequestCheckTx{Tx: tx})
+	if err != nil {
+		return res, err
+	}
+
+	// TODO refactor to pass a `pointer` directly
+	res = abci.ToResponseCheckTx(r)
+	mem.reqResCb(tx, txInfo, res, nil)
+	return res, err
+}
+
+// cb: A callback from the CheckTx command.
+//
+//	It gets called from another goroutine.
+//
+// Safe for concurrent use by multiple goroutines.
+func (mem *CListMempool) CheckTxAsync(tx types.Tx, txInfo TxInfo, prepareCb func(error), checkTxCb func(*abci.Response)) {
+	mem.chReqCheckTx <- &requestCheckTxAsync{tx: tx, txInfo: txInfo, prepareCb: prepareCb, checkTxCb: checkTxCb}
+}
+
+func (mem *CListMempool) checkTxAsyncReactor() {
+	for req := range mem.chReqCheckTx {
+		mem.checkTxAsync(req.tx, req.txInfo, req.prepareCb, req.checkTxCb)
+	}
+}
+
+// It blocks if we're waiting on Update() or Reap().
+func (mem *CListMempool) checkTxAsync(tx types.Tx, txInfo TxInfo, prepareCb func(error), checkTxCb func(*abci.Response)) {
+	mem.updateMtx.RLock()
+	defer func() {
+		if r := recover(); r != nil {
+			mem.updateMtx.RUnlock()
+			panic(r)
+		}
+	}()
+
+	err := mem.prepareCheckTx(tx, txInfo)
+	if prepareCb != nil {
+		prepareCb(err)
+	}
+	if err != nil {
+		mem.updateMtx.RUnlock()
+		return
+	}
+
+	// CONTRACT: `app.CheckTxAsync()` should check whether `GasWanted` is valid (0 <= GasWanted <= block.masGas)
+	reqRes, err := mem.proxyAppConn.CheckTxAsync(context.TODO(), &abci.RequestCheckTx{Tx: tx})
+	reqRes.SetCallback(func(res *abci.Response) {
+		mem.reqResCb(tx, txInfo, res, func(response *abci.Response) {
+			if checkTxCb != nil {
+				checkTxCb(response)
+			}
+			mem.updateMtx.RUnlock()
+		})
+	})
+}
+
+// It blocks if we're waiting on Update() or Reap().
 // cb: A callback from the CheckTx command.
 //
 //	It gets called from another goroutine.
@@ -216,15 +286,7 @@ func (mem *CListMempool) TxsWaitChan() <-chan struct{} {
 // CONTRACT: Either cb will get called, or err returned.
 //
 // Safe for concurrent use by multiple goroutines.
-func (mem *CListMempool) CheckTx(
-	tx types.Tx,
-	cb func(*abci.ResponseCheckTx),
-	txInfo TxInfo,
-) error {
-	mem.updateMtx.RLock()
-	// use defer to unlock mutex because application (*local client*) might panic
-	defer mem.updateMtx.RUnlock()
-
+func (mem *CListMempool) prepareCheckTx(tx types.Tx, txInfo TxInfo) error {
 	txSize := len(tx)
 
 	if err := mem.isFull(txSize); err != nil {
@@ -265,12 +327,6 @@ func (mem *CListMempool) CheckTx(
 		return ErrTxInCache
 	}
 
-	reqRes, err := mem.proxyAppConn.CheckTxAsync(context.TODO(), &abci.RequestCheckTx{Tx: tx})
-	if err != nil {
-		return err
-	}
-	reqRes.SetCallback(mem.reqResCb(tx, txInfo, cb))
-
 	return nil
 }
 
@@ -284,15 +340,18 @@ func (mem *CListMempool) CheckTx(
 // When rechecking, we don't need the peerID, so the recheck callback happens
 // here.
 func (mem *CListMempool) globalCb(req *abci.Request, res *abci.Response) {
-	if mem.recheckCursor == nil {
+	checkTxReq := req.GetCheckTx()
+	if checkTxReq == nil {
 		return
 	}
 
-	mem.metrics.RecheckTimes.Add(1)
-	mem.resCbRecheck(req, res)
+	if checkTxReq.Type == abci.CheckTxType_Recheck {
+		mem.metrics.RecheckTimes.Add(1)
+		mem.resCbRecheck(req, res)
 
-	// update metrics
-	mem.metrics.Size.Set(float64(mem.Size()))
+		// update metrics
+		mem.metrics.Size.Set(float64(mem.Size()))
+	}
 }
 
 // Request specific callback that should be set on individual reqRes objects
@@ -307,24 +366,18 @@ func (mem *CListMempool) globalCb(req *abci.Request, res *abci.Response) {
 func (mem *CListMempool) reqResCb(
 	tx []byte,
 	txInfo TxInfo,
-	externalCb func(*abci.ResponseCheckTx),
-) func(res *abci.Response) {
-	return func(res *abci.Response) {
-		if mem.recheckCursor != nil {
-			// this should never happen
-			panic("recheck cursor is not nil in reqResCb")
-		}
+	res *abci.Response,
+	externalCb func(*abci.Response),
+) {
+	mem.resCbFirstTime(tx, txInfo, res)
 
-		mem.resCbFirstTime(tx, txInfo, res)
+	// update metrics
+	mem.metrics.Size.Set(float64(mem.Size()))
+	mem.metrics.SizeBytes.Set(float64(mem.SizeBytes()))
 
-		// update metrics
-		mem.metrics.Size.Set(float64(mem.Size()))
-		mem.metrics.SizeBytes.Set(float64(mem.SizeBytes()))
-
-		// passed in by the caller of CheckTx, eg. the RPC
-		if externalCb != nil {
-			externalCb(res.GetCheckTx())
-		}
+	// passed in by the caller of CheckTx, eg. the RPC
+	if externalCb != nil {
+		externalCb(res)
 	}
 }
 
@@ -455,65 +508,32 @@ func (mem *CListMempool) resCbRecheck(req *abci.Request, res *abci.Response) {
 	switch r := res.Value.(type) {
 	case *abci.Response_CheckTx:
 		tx := req.GetCheckTx().Tx
-		memTx := mem.recheckCursor.Value.(*mempoolTx)
-
-		// Search through the remaining list of tx to recheck for a transaction that matches
-		// the one we received from the ABCI application.
-		for {
-			if bytes.Equal(tx, memTx.tx) {
-				// We've found a tx in the recheck list that matches the tx that we
-				// received from the ABCI application.
-				// Break, and use this transaction for further checks.
-				break
-			}
-
-			mem.logger.Error(
-				"re-CheckTx transaction mismatch",
-				"got", types.Tx(tx),
-				"expected", memTx.tx,
-			)
-
-			if mem.recheckCursor == mem.recheckEnd {
-				// we reached the end of the recheckTx list without finding a tx
-				// matching the one we received from the ABCI application.
-				// Return without processing any tx.
-				mem.recheckCursor = nil
-				return
-			}
-
-			mem.recheckCursor = mem.recheckCursor.Next()
-			memTx = mem.recheckCursor.Value.(*mempoolTx)
+		txKey := types.Tx(tx).Key()
+		_, ok := mem.txsMap.Load(txKey)
+		if !ok {
+			mem.logger.Debug("re-CheckTx transaction does not exist", "expected", types.Tx(tx).Hash())
+			return
 		}
 
 		var postCheckErr error
-		if mem.postCheck != nil {
+		if r.CheckTx.Code == abci.CodeTypeOK {
+			if mem.postCheck == nil {
+				return
+			}
 			postCheckErr = mem.postCheck(tx, r.CheckTx)
+			if postCheckErr == nil {
+				return
+			}
 		}
+		// Tx became invalidated due to newly committed block.
+		mem.logger.Debug("tx is no longer valid", "tx", types.Tx(tx).Hash(), "res", r, "err", postCheckErr)
 
-		if (r.CheckTx.Code != abci.CodeTypeOK) || postCheckErr != nil {
-			// Tx became invalidated due to newly committed block.
-			mem.logger.Debug("tx is no longer valid", "tx", types.Tx(tx).Hash(), "res", r, "err", postCheckErr)
-			if err := mem.RemoveTxByKey(memTx.tx.Key()); err != nil {
-				mem.logger.Debug("Transaction could not be removed from mempool", "err", err)
-			}
-			// We remove the invalid tx from the cache because it might be good later
-			if !mem.config.KeepInvalidTxsInCache {
-				mem.cache.Remove(tx)
-			}
+		// We remove the invalid tx from the cache because it might be good later
+		if err := mem.RemoveTxByKey(txKey); err != nil {
+			mem.logger.Debug("Transaction could not be removed from mempool", "err", err)
 		}
-		if mem.recheckCursor == mem.recheckEnd {
-			mem.recheckCursor = nil
-		} else {
-			mem.recheckCursor = mem.recheckCursor.Next()
-		}
-		if mem.recheckCursor == nil {
-			// Done!
-			mem.logger.Debug("done rechecking txs")
-
-			// incase the recheck removed all txs
-			if mem.Size() > 0 {
-				mem.notifyTxsAvailable()
-			}
+		if !mem.config.KeepInvalidTxsInCache {
+			mem.cache.Remove(tx)
 		}
 	default:
 		// ignore other messages
@@ -599,14 +619,13 @@ func (mem *CListMempool) ReapMaxTxs(max int) types.Txs {
 
 // Lock() must be help by the caller during execution.
 func (mem *CListMempool) Update(
-	height int64,
-	txs types.Txs,
+	block *types.Block,
 	txResults []*abci.ExecTxResult,
 	preCheck PreCheckFunc,
 	postCheck PostCheckFunc,
 ) error {
 	// Set height
-	mem.height = height
+	mem.height = block.Height
 	mem.notifiedTxsAvailable = false
 
 	if preCheck != nil {
@@ -616,7 +635,7 @@ func (mem *CListMempool) Update(
 		mem.postCheck = postCheck
 	}
 
-	for i, tx := range txs {
+	for i, tx := range block.Txs {
 		if txResults[i].Code == abci.CodeTypeOK {
 			// Add valid committed tx to the cache (if missing).
 			_ = mem.cache.Push(tx)
@@ -646,14 +665,32 @@ func (mem *CListMempool) Update(
 	// or just notify there're some txs left.
 	if mem.Size() > 0 {
 		if mem.config.Recheck {
-			mem.logger.Debug("recheck txs", "numtxs", mem.Size(), "height", height)
-			mem.recheckTxs()
-			// At this point, mem.txs are being rechecked.
-			// mem.recheckCursor re-scans mem.txs and possibly removes some txs.
-			// Before mem.Reap(), we should wait for mem.recheckCursor to be nil.
-		} else {
-			mem.notifyTxsAvailable()
+			mem.logger.Debug("recheck txs", "numtxs", mem.Size(), "height", block.Height)
+			res, err := mem.proxyAppConn.BeginRecheckTxSync(context.TODO(), &abci.RequestBeginRecheckTx{
+				Header: types.TM2PB.Header(&block.Header),
+			})
+			if res.Code == abci.CodeTypeOK && err == nil {
+				mem.recheckTxs()
+				res2, err2 := mem.proxyAppConn.EndRecheckTxSync(context.TODO(), &abci.RequestEndRecheckTx{Height: block.Height})
+				if res2.Code != abci.CodeTypeOK {
+					return errors.New("the function EndRecheckTxSync does not respond CodeTypeOK")
+				}
+				if err2 != nil {
+					return errors.Join(err2, errors.New("the function EndRecheckTxSync returns an error"))
+				}
+			} else {
+				if res.Code != abci.CodeTypeOK {
+					return errors.New("the function BeginRecheckTxSync does not respond CodeTypeOK")
+				}
+				if err != nil {
+					return errors.Join(err, errors.New("the function BeginRecheckTxSync returns an error"))
+				}
+			}
 		}
+	}
+
+	if mem.Size() > 0 {
+		mem.notifyTxsAvailable()
 	}
 
 	// Update metrics
@@ -668,22 +705,24 @@ func (mem *CListMempool) recheckTxs() {
 		panic("recheckTxs is called, but the mempool is empty")
 	}
 
-	mem.recheckCursor = mem.txs.Front()
-	mem.recheckEnd = mem.txs.Back()
+	wg := sync.WaitGroup{}
 
 	// Push txs to proxyAppConn
 	// NOTE: globalCb may be called concurrently.
 	for e := mem.txs.Front(); e != nil; e = e.Next() {
+		wg.Add(1)
+
 		memTx := e.Value.(*mempoolTx)
-		_, err := mem.proxyAppConn.CheckTxAsync(context.TODO(), &abci.RequestCheckTx{
+		reqRes, _ := mem.proxyAppConn.CheckTxAsync(context.TODO(), &abci.RequestCheckTx{
 			Tx:   memTx.tx,
 			Type: abci.CheckTxType_Recheck,
 		})
-		if err != nil {
-			mem.logger.Error("recheckTx", err, "err")
-			return
-		}
+		reqRes.SetCallback(func(res *abci.Response) {
+			wg.Done()
+		})
 	}
+
+	wg.Wait()
 
 	// In <v0.37 we would call FlushAsync at the end of recheckTx forcing the buffer to flush
 	// all pending messages to the app. There doesn't seem to be any need here as the buffer
