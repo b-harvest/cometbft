@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	abci "github.com/cometbft/cometbft/abci/types"
 	"github.com/cometbft/cometbft/config"
@@ -644,8 +646,11 @@ func (mem *CListMempool) Update(
 	// or just notify there're some txs left.
 	if mem.Size() > 0 {
 		if mem.config.Recheck {
+			fName, tFormat := "Mempool.Update", "15:04:05.000"
+			mem.logger.Info(fmt.Sprintf("[%s]%s::start recheck txs", time.Now().Format(tFormat), fName), "numtxs", mem.Size())
 			mem.logger.Debug("recheck txs", "numtxs", mem.Size(), "height", height)
 			mem.recheckTxs()
+			mem.logger.Info(fmt.Sprintf("[%s]%s::done recheck txs", time.Now().Format(tFormat), fName), "numtxs", mem.Size())
 			// At this point, mem.txs are being rechecked.
 			// mem.recheckCursor re-scans mem.txs and possibly removes some txs.
 			// Before mem.Reap(), we should wait for mem.recheckCursor to be nil.
