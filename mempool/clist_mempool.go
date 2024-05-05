@@ -445,7 +445,7 @@ func (mem *CListMempool) resCbFirstTime(
 			if err := mem.isFull(len(tx)); err != nil {
 				// remove from cache (mempool might have a space later)
 				mem.cache.Remove(tx)
-				mem.logger.Error(err.Error())
+				// mem.logger.Error(err.Error())
 				return
 			}
 
