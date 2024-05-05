@@ -98,6 +98,9 @@ type Mempool interface {
 
 	// SizeBytes returns the total size of all txs in the mempool.
 	SizeBytes() int64
+
+	// ResetRateLimitCounter resets the rate limit counter.
+	ResetRateLimitCounter()
 }
 
 // PreCheckFunc is an optional filter executed before CheckTx and rejects
@@ -178,6 +181,16 @@ func (e ErrMempoolIsFull) Error() string {
 		e.TxsBytes,
 		e.MaxTxsBytes,
 	)
+}
+
+// TODO: Add handling new error type logic in cosmos-sdk
+type ErrMempoolRateLimitExceeded struct {
+	Rate  int32
+	Count int32
+}
+
+func (e ErrMempoolRateLimitExceeded) Error() string {
+	return fmt.Sprintf("mempool rate limit exceeded: rate %d, count %d", e.Rate, e.Count)
 }
 
 // ErrPreCheck defines an error where a transaction fails a pre-check.

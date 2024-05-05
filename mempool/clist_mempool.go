@@ -17,6 +17,16 @@ import (
 	"github.com/cometbft/cometbft/types"
 )
 
+type count32 int32
+
+func (c *count32) inc() int32 {
+	return atomic.AddInt32((*int32)(c), 1)
+}
+
+func (c *count32) get() int32 {
+	return atomic.LoadInt32((*int32)(c))
+}
+
 // CListMempool is an ordered in-memory pool for transactions before they are
 // proposed in a consensus round. Transaction validity is checked using the
 // CheckTx abci message before the transaction is added to the pool. The
@@ -57,6 +67,8 @@ type CListMempool struct {
 
 	logger  log.Logger
 	metrics *Metrics
+
+	rateLimitCounter count32
 }
 
 var _ Mempool = &CListMempool{}
@@ -95,6 +107,7 @@ func NewCListMempool(
 		option(mp)
 	}
 
+	mp.rateLimitCounter = 0
 	return mp
 }
 
@@ -187,6 +200,7 @@ func (mem *CListMempool) Flush() {
 	mem.cache.Reset()
 
 	mem.removeAllTxs()
+	mem.ResetRateLimitCounter()
 }
 
 // TxsFront returns the first transaction in the ordered list for peer
@@ -292,6 +306,7 @@ func (mem *CListMempool) globalCb(req *abci.Request, res *abci.Response) {
 
 	// update metrics
 	mem.metrics.Size.Set(float64(mem.Size()))
+	mem.metrics.RateLimitCounter.Set(float64(mem.rateLimitCounter.get()))
 }
 
 // Request specific callback that should be set on individual reqRes objects
@@ -319,6 +334,7 @@ func (mem *CListMempool) reqResCb(
 		// update metrics
 		mem.metrics.Size.Set(float64(mem.Size()))
 		mem.metrics.SizeBytes.Set(float64(mem.SizeBytes()))
+		mem.metrics.RateLimitCounter.Set(float64(mem.rateLimitCounter.get()))
 
 		// passed in by the caller of CheckTx, eg. the RPC
 		if externalCb != nil {
@@ -357,6 +373,12 @@ func (mem *CListMempool) isFull(txSize int) error {
 		memSize  = mem.Size()
 		txsBytes = mem.SizeBytes()
 	)
+	if mem.rateLimitCounter.get() >= mem.config.RateLimit {
+		return ErrMempoolRateLimitExceeded{
+			Rate:  mem.config.RateLimit,
+			Count: mem.rateLimitCounter.get(),
+		}
+	}
 
 	if memSize >= mem.config.Size || int64(txSize)+txsBytes > mem.config.MaxTxsBytes {
 		return ErrMempoolIsFull{
@@ -416,6 +438,7 @@ func (mem *CListMempool) resCbFirstTime(
 			}
 			memTx.addSender(txInfo.SenderID)
 			mem.addTx(memTx)
+			mem.rateLimitCounter.inc()
 			mem.logger.Debug(
 				"added good transaction",
 				"tx", types.Tx(tx).Hash(),
@@ -657,6 +680,7 @@ func (mem *CListMempool) Update(
 	// Update metrics
 	mem.metrics.Size.Set(float64(mem.Size()))
 	mem.metrics.SizeBytes.Set(float64(mem.SizeBytes()))
+	mem.metrics.RateLimitCounter.Set(float64(mem.rateLimitCounter.get()))
 
 	return nil
 }
@@ -686,4 +710,9 @@ func (mem *CListMempool) recheckTxs() {
 	// In <v0.37 we would call FlushAsync at the end of recheckTx forcing the buffer to flush
 	// all pending messages to the app. There doesn't seem to be any need here as the buffer
 	// will get flushed regularly or when filled.
+}
+
+func (mem *CListMempool) ResetRateLimitCounter() {
+	mem.logger.Debug("reset rate limit counter")
+	mem.rateLimitCounter = 0
 }

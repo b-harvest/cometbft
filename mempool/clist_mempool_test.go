@@ -359,6 +359,29 @@ func TestMempool_KeepInvalidTxsInCache(t *testing.T) {
 	}
 }
 
+func TestRateLimit(t *testing.T) {
+	app := kvstore.NewInMemoryApplication()
+	cc := proxy.NewLocalClientCreator(app)
+	mp, cleanup := newMempoolWithApp(cc)
+	defer cleanup()
+
+	count := 500 // default rate limit is 400
+	txs := make(types.Txs, count)
+	txInfo := TxInfo{SenderID: UnknownPeerID}
+	var err error
+	for i := 0; i < count; i++ {
+		txBytes := kvstore.NewRandomTx(20)
+		txs[i] = txBytes
+		if err = mp.CheckTx(txBytes, nil, txInfo); err != nil {
+			if IsPreCheckError(err) {
+				t.Fatalf("PreCheck failed: %v while checking #%d tx", err, i)
+				continue
+			}
+		}
+	}
+	require.ErrorIs(t, err, ErrMempoolRateLimitExceeded{Rate: 400, Count: 400})
+}
+
 func TestTxsAvailable(t *testing.T) {
 	app := kvstore.NewInMemoryApplication()
 	cc := proxy.NewLocalClientCreator(app)
@@ -477,7 +500,7 @@ func TestSerialReap(t *testing.T) {
 		}
 	}
 
-	//----------------------------------------
+	// ----------------------------------------
 
 	// Deliver some txs.
 	deliverTxsRange(0, 100)
@@ -729,7 +752,7 @@ func TestMempoolRemoteAppConcurrency(t *testing.T) {
 		tx := txs[txNum]
 
 		// this will err with ErrTxInCache many times ...
-		mp.CheckTx(tx, nil, TxInfo{SenderID: uint16(peerID)}) //nolint: errcheck // will error
+		mp.CheckTx(tx, nil, TxInfo{SenderID: uint16(peerID)}) // nolint: errcheck // will error
 	}
 
 	require.NoError(t, mp.FlushAppConn())

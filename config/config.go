@@ -164,11 +164,11 @@ func (cfg *Config) CheckDeprecated() []string {
 	return warnings
 }
 
-//-----------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 // BaseConfig
 
 // BaseConfig defines the base configuration for a CometBFT node
-type BaseConfig struct { //nolint: maligned
+type BaseConfig struct { // nolint: maligned
 
 	// The version of the CometBFT binary that created
 	// or last modified the config file
@@ -308,7 +308,7 @@ func (cfg BaseConfig) ValidateBasic() error {
 	return nil
 }
 
-//-----------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 // RPCConfig
 
 // RPCConfig defines the configuration options for the CometBFT RPC server
@@ -525,11 +525,11 @@ func (cfg RPCConfig) IsTLSEnabled() bool {
 	return cfg.TLSCertFile != "" && cfg.TLSKeyFile != ""
 }
 
-//-----------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 // P2PConfig
 
 // P2PConfig defines the configuration options for the CometBFT peer-to-peer networking layer
-type P2PConfig struct { //nolint: maligned
+type P2PConfig struct { // nolint: maligned
 	RootDir string `mapstructure:"home"`
 
 	// Address to listen for incoming connections
@@ -690,7 +690,7 @@ func DefaultFuzzConnConfig() *FuzzConnConfig {
 	}
 }
 
-//-----------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 // MempoolConfig
 
 // MempoolConfig defines the configuration options for the CometBFT mempool
@@ -745,6 +745,8 @@ type MempoolConfig struct {
 	// Maximum size of a single transaction
 	// NOTE: the max size of a tx transmitted over the network is {max_tx_bytes}.
 	MaxTxBytes int `mapstructure:"max_tx_bytes"`
+	// Maximum possible input txs during consensus (= 1 block)
+	RateLimit int32 `mapstructure:"rate_limit"`
 	// Maximum size of a batch of transactions to send to a peer
 	// Including space needed by encoding (one varint per transaction).
 	// XXX: Unused due to https://github.com/tendermint/tendermint/issues/5796
@@ -778,6 +780,7 @@ func DefaultMempoolConfig() *MempoolConfig {
 		MaxTxsBytes: 1024 * 1024 * 1024, // 1GB
 		CacheSize:   10000,
 		MaxTxBytes:  1024 * 1024, // 1MB
+		RateLimit:   400,
 		ExperimentalMaxGossipConnectionsToNonPersistentPeers: 0,
 		ExperimentalMaxGossipConnectionsToPersistentPeers:    0,
 	}
@@ -821,6 +824,9 @@ func (cfg *MempoolConfig) ValidateBasic() error {
 	if cfg.MaxTxBytes < 0 {
 		return errors.New("max_tx_bytes can't be negative")
 	}
+	if cfg.RateLimit < 0 {
+		return errors.New("rate_limit can't be negative")
+	}
 	if cfg.ExperimentalMaxGossipConnectionsToPersistentPeers < 0 {
 		return errors.New("experimental_max_gossip_connections_to_persistent_peers can't be negative")
 	}
@@ -830,7 +836,7 @@ func (cfg *MempoolConfig) ValidateBasic() error {
 	return nil
 }
 
-//-----------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 // StateSyncConfig
 
 // StateSyncConfig defines the configuration for the CometBFT state sync service
@@ -920,7 +926,7 @@ func (cfg *StateSyncConfig) ValidateBasic() error {
 	return nil
 }
 
-//-----------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 // BlockSyncConfig
 
 // BlockSyncConfig (formerly known as FastSync) defines the configuration for the CometBFT block sync service
@@ -952,7 +958,7 @@ func (cfg *BlockSyncConfig) ValidateBasic() error {
 	}
 }
 
-//-----------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 // ConsensusConfig
 
 // ConsensusConfig defines the configuration for the Tendermint consensus algorithm, adopted by CometBFT,
@@ -1116,7 +1122,7 @@ func (cfg *ConsensusConfig) ValidateBasic() error {
 	return nil
 }
 
-//-----------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 // StorageConfig
 
 // StorageConfig allows more fine-grained control over certain storage-related
@@ -1184,7 +1190,7 @@ func TestTxIndexConfig() *TxIndexConfig {
 	return DefaultTxIndexConfig()
 }
 
-//-----------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 // InstrumentationConfig
 
 // InstrumentationConfig defines the configuration for metrics reporting.
@@ -1237,7 +1243,7 @@ func (cfg *InstrumentationConfig) IsPrometheusEnabled() bool {
 	return cfg.Prometheus && cfg.PrometheusListenAddr != ""
 }
 
-//-----------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 // Utils
 
 // helper function to make config creation independent of root dir
@@ -1248,7 +1254,7 @@ func rootify(path, root string) string {
 	return filepath.Join(root, path)
 }
 
-//-----------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 // Moniker
 
 var defaultMoniker = getDefaultMoniker()

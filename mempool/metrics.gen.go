@@ -64,6 +64,12 @@ func PrometheusMetrics(namespace string, labelsAndValues ...string) *Metrics {
 			Name:      "active_outbound_connections",
 			Help:      "Number of connections being actively used for gossiping transactions (experimental feature).",
 		}, labels).With(labelsAndValues...),
+		RateLimitCounter: prometheus.NewGaugeFrom(stdprometheus.GaugeOpts{
+			Namespace: namespace,
+			Subsystem: MetricsSubsystem,
+			Name:      "rate_limit_counter",
+			Help:      "Rate limit counter.",
+		}, labels).With(labelsAndValues...),
 	}
 }
 
@@ -77,5 +83,6 @@ func NopMetrics() *Metrics {
 		EvictedTxs:                discard.NewCounter(),
 		RecheckTimes:              discard.NewCounter(),
 		ActiveOutboundConnections: discard.NewGauge(),
+		RateLimitCounter:          discard.NewGauge(),
 	}
 }
