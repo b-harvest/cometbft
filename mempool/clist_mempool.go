@@ -3,8 +3,10 @@ package mempool
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	abci "github.com/cometbft/cometbft/abci/types"
 	"github.com/cometbft/cometbft/config"
@@ -665,10 +667,13 @@ func (mem *CListMempool) Update(
 	// or just notify there're some txs left.
 	if mem.Size() > 0 {
 		if mem.config.Recheck {
+			fName, tFormat := "Mempool.Update", "15:04:05.000"
+			mem.logger.Info(fmt.Sprintf("[%s]%s::start recheck txs", time.Now().Format(tFormat), fName), "numtxs", mem.Size(), "height", block.Height)
 			mem.logger.Debug("recheck txs", "numtxs", mem.Size(), "height", block.Height)
 			res, err := mem.proxyAppConn.BeginRecheckTxSync(context.TODO(), &abci.RequestBeginRecheckTx{
 				Header: types.TM2PB.Header(&block.Header),
 			})
+			mem.logger.Info(fmt.Sprintf("[%s]%s::done recheck txs", time.Now().Format(tFormat), fName))
 			if res.Code == abci.CodeTypeOK && err == nil {
 				mem.recheckTxs()
 				res2, err2 := mem.proxyAppConn.EndRecheckTxSync(context.TODO(), &abci.RequestEndRecheckTx{Height: block.Height})
