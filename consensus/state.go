@@ -1937,7 +1937,7 @@ func (cs *State) defaultSetProposal(proposal *types.Proposal) error {
 		cs.ProposalBlockParts = types.NewPartSetFromHeader(proposal.BlockID.PartSetHeader)
 	}
 
-	cs.Logger.Info("received proposal", "proposal", proposal, "proposer", pubKey.Address())
+	cs.Logger.Info(fmt.Sprintf("[%s]received proposal", time.Now().Format("15:04:05.000")), "proposal", proposal, "proposer", pubKey.Address())
 	return nil
 }
 

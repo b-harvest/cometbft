@@ -1,6 +1,7 @@
 package consensus
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/cometbft/cometbft/libs/log"
@@ -74,7 +75,7 @@ func (t *timeoutTicker) ScheduleTimeout(ti timeoutInfo) {
 	t.tickChan <- ti
 }
 
-//-------------------------------------------------------------
+// -------------------------------------------------------------
 
 // stop the timer and drain if necessary
 func (t *timeoutTicker) stopTimer() {
@@ -121,7 +122,7 @@ func (t *timeoutTicker) timeoutRoutine() {
 			t.timer.Reset(ti.Duration)
 			t.Logger.Debug("Scheduled timeout", "dur", ti.Duration, "height", ti.Height, "round", ti.Round, "step", ti.Step)
 		case <-t.timer.C:
-			t.Logger.Info("Timed out", "dur", ti.Duration, "height", ti.Height, "round", ti.Round, "step", ti.Step)
+			t.Logger.Info(fmt.Sprintf("[%s]Timed out", time.Now().Format("15:04:05.000")), "dur", ti.Duration, "height", ti.Height, "round", ti.Round, "step", ti.Step)
 			// go routine here guarantees timeoutRoutine doesn't block.
 			// Determinism comes from playback in the receiveRoutine.
 			// We can eliminate it by merging the timeoutRoutine into receiveRoutine
