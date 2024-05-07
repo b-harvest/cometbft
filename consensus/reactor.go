@@ -33,7 +33,7 @@ const (
 	votesToContributeToBecomeGoodPeer  = 10000
 )
 
-//-----------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 
 // Reactor defines a reactor for the consensus service.
 type Reactor struct {
@@ -403,7 +403,7 @@ func (conR *Reactor) WaitSync() bool {
 	return conR.waitSync
 }
 
-//--------------------------------------
+// --------------------------------------
 
 // subscribeToBroadcastEvents subscribes for new round steps and votes
 // using internal pubsub defined on state to broadcast
@@ -537,6 +537,7 @@ func (conR *Reactor) getRoundState() *cstypes.RoundState {
 }
 
 func (conR *Reactor) gossipDataRoutine(peer p2p.Peer, ps *PeerState) {
+	fName, tFormat := "gossipDataRoutine", "15:04:05.000"
 	logger := conR.Logger.With("peer", peer)
 
 OUTER_LOOP:
@@ -557,6 +558,7 @@ OUTER_LOOP:
 					panic(err)
 				}
 				logger.Debug("Sending block part", "height", prs.Height, "round", prs.Round)
+				logger.Info(fmt.Sprintf("[%s][%s]sending block part", time.Now().Format(tFormat), fName), "prs.Height", prs.Height, "prs.Round", prs.Round)
 				if peer.Send(p2p.Envelope{
 					ChannelID: DataChannel,
 					Message: &cmtcons.BlockPart{
@@ -565,6 +567,7 @@ OUTER_LOOP:
 						Part:   *parts,
 					},
 				}) {
+					logger.Info(fmt.Sprintf("[%s][%s]sent block part", time.Now().Format(tFormat), fName))
 					ps.SetHasProposalBlockPart(prs.Height, prs.Round, index)
 				}
 				continue OUTER_LOOP
@@ -597,6 +600,9 @@ OUTER_LOOP:
 		if (rs.Height != prs.Height) || (rs.Round != prs.Round) {
 			// logger.Info("Peer Height|Round mismatch, sleeping",
 			// "peerHeight", prs.Height, "peerRound", prs.Round, "peer", peer)
+			logger.Info(
+				fmt.Sprintf("[%s]%s::sleep peer gossip duration", time.Now().Format(tFormat), fName),
+				"reason", "Height|Round mismatch", "peerHeight", prs.Height, "peerRound", prs.Round, "peer", peer, "rs.Height", rs.Height, "rs.Round", rs.Round)
 			time.Sleep(conR.conS.config.PeerGossipSleepDuration)
 			continue OUTER_LOOP
 		}
@@ -638,6 +644,9 @@ OUTER_LOOP:
 		}
 
 		// Nothing to do. Sleep.
+		logger.Info(
+			fmt.Sprintf("[%s]%s::sleep peer gossip duration", time.Now().Format(tFormat), fName),
+			"reason", "nothing to do")
 		time.Sleep(conR.conS.config.PeerGossipSleepDuration)
 		continue OUTER_LOOP
 	}
@@ -646,6 +655,7 @@ OUTER_LOOP:
 func (conR *Reactor) gossipDataForCatchup(logger log.Logger, rs *cstypes.RoundState,
 	prs *cstypes.PeerRoundState, ps *PeerState, peer p2p.Peer,
 ) {
+	fName, tFormat := "gossipVotesRoutine", "15:04:05.000"
 	if index, ok := prs.ProposalBlockParts.Not().PickRandom(); ok {
 		// Ensure that the peer's PartSetHeader is correct
 		blockMeta := conR.conS.blockStore.LoadBlockMeta(prs.Height)
@@ -675,6 +685,7 @@ func (conR *Reactor) gossipDataForCatchup(logger log.Logger, rs *cstypes.RoundSt
 			logger.Error("Could not convert part to proto", "index", index, "error", err)
 			return
 		}
+		logger.Info(fmt.Sprintf("[%s]%s::sending block part for catchup", time.Now().Format(tFormat), fName), "prs.Round", prs.Round, "index", index)
 		if peer.Send(p2p.Envelope{
 			ChannelID: DataChannel,
 			Message: &cmtcons.BlockPart{
@@ -684,18 +695,28 @@ func (conR *Reactor) gossipDataForCatchup(logger log.Logger, rs *cstypes.RoundSt
 			},
 		}) {
 			ps.SetHasProposalBlockPart(prs.Height, prs.Round, index)
+			logger.Info(fmt.Sprintf("[%s]%s::sent block part for catchup", time.Now().Format(tFormat), fName))
 		} else {
+			logger.Info(
+				fmt.Sprintf("[%s]%s::sleep peer gossip duration", time.Now().Format(tFormat), fName),
+				"reason", "sending block part for catchup failed",
+			)
 			logger.Debug("Sending block part for catchup failed")
 			// sleep to avoid retrying too fast
 			time.Sleep(conR.conS.config.PeerGossipSleepDuration)
 		}
 		return
 	}
+	logger.Info(
+		fmt.Sprintf("[%s]%s::sleep peer gossip duration", time.Now().Format(tFormat), fName),
+		"reason", "no parts to send in catch-up, sleeping",
+	)
 	//  logger.Info("No parts to send in catch-up, sleeping")
 	time.Sleep(conR.conS.config.PeerGossipSleepDuration)
 }
 
 func (conR *Reactor) gossipVotesRoutine(peer p2p.Peer, ps *PeerState) {
+	fName, tFormat := "gossipVotesRoutine", "15:04:05.000"
 	logger := conR.Logger.With("peer", peer)
 
 	// Simple hack to throttle logs upon sleep.
@@ -707,8 +728,10 @@ OUTER_LOOP:
 		if !peer.IsRunning() || !conR.IsRunning() {
 			return
 		}
+		// logger.Info(fmt.Sprintf("[%s]%s::call conR.getRoundState and ps.GetRoundState, both including lock", time.Now().Format(tFormat), fName))
 		rs := conR.getRoundState()
 		prs := ps.GetRoundState()
+		// logger.Info(fmt.Sprintf("[%s]%s::done conR.getRoundState and ps.GetRoundState, both including lock", time.Now().Format(tFormat), fName))
 
 		switch sleeping {
 		case 1: // First sleep
@@ -722,7 +745,7 @@ OUTER_LOOP:
 
 		// If height matches, then send LastCommit, Prevotes, Precommits.
 		if rs.Height == prs.Height {
-			heightLogger := logger.With("height", prs.Height)
+			heightLogger := logger.With("prs.Height", prs.Height)
 			if conR.gossipVotesForHeight(heightLogger, rs, prs, ps) {
 				continue OUTER_LOOP
 			}
@@ -731,7 +754,9 @@ OUTER_LOOP:
 		// Special catchup logic.
 		// If peer is lagging by height 1, send LastCommit.
 		if prs.Height != 0 && rs.Height == prs.Height+1 {
+			logger.Info(fmt.Sprintf("[%s]%s::try to send rs.LastCommit(special catchup logic, per is lagging by height 1)", time.Now().Format(tFormat), fName), "prs", prs)
 			if ps.PickSendVote(rs.LastCommit) {
+				logger.Info(fmt.Sprintf("[%s]%s::sent rs.LastCommit(special catchup logic, per is lagging by height 1)", time.Now().Format(tFormat), fName))
 				logger.Debug("Picked rs.LastCommit to send", "height", prs.Height)
 				continue OUTER_LOOP
 			}
@@ -762,7 +787,9 @@ OUTER_LOOP:
 			if ec == nil {
 				continue
 			}
+			logger.Info(fmt.Sprintf("[%s]%s::try to send rs.LastCommit(catchup logic, peer is lagging more than 1)", time.Now().Format(tFormat), fName), "prs", prs)
 			if ps.PickSendVote(ec) {
+				logger.Info(fmt.Sprintf("[%s]%s::sent rs.LastCommit(catchup logic, peer is lagging more than 1)", time.Now().Format(tFormat), fName))
 				logger.Debug("Picked Catchup commit to send", "height", prs.Height)
 				continue OUTER_LOOP
 			}
@@ -779,6 +806,7 @@ OUTER_LOOP:
 			sleeping = 1
 		}
 
+		logger.Info(fmt.Sprintf("[%s]%s::sleep peer gossip duration", time.Now().Format(tFormat), fName), conR.conS.config.PeerGossipSleepDuration)
 		time.Sleep(conR.conS.config.PeerGossipSleepDuration)
 		continue OUTER_LOOP
 	}
@@ -790,17 +818,23 @@ func (conR *Reactor) gossipVotesForHeight(
 	prs *cstypes.PeerRoundState,
 	ps *PeerState,
 ) bool {
+	fName, tFormat := "gossipVotesForHeight", "15:04:05.000"
+	logger.Info(fmt.Sprintf("[%s]start gossipVotesForHeight", time.Now().Format(tFormat)), "rs.Height", rs.Height, "rs.Round", rs.Round, "rs.Step", rs.Step, "prs.Round", prs.Round, "prs.Step", prs.Step, "ps", ps)
 	// If there are lastCommits to send...
 	if prs.Step == cstypes.RoundStepNewHeight {
+		logger.Info(fmt.Sprintf("[%s]%s::try to send rs.LastCommit", time.Now().Format(tFormat), fName), "rs.LastCommit", rs.LastCommit.StringShort2())
 		if ps.PickSendVote(rs.LastCommit) {
-			logger.Debug("Picked rs.LastCommit to send")
+			// logger.Debug("Picked rs.LastCommit to send")
+			logger.Info(fmt.Sprintf("[%s]%s::sent rs.LastCommit", time.Now().Format(tFormat), fName))
 			return true
 		}
 	}
 	// If there are POL prevotes to send...
 	if prs.Step <= cstypes.RoundStepPropose && prs.Round != -1 && prs.Round <= rs.Round && prs.ProposalPOLRound != -1 {
 		if polPrevotes := rs.Votes.Prevotes(prs.ProposalPOLRound); polPrevotes != nil {
+			logger.Info(fmt.Sprintf("[%s]%s::try to send polPrevotes", time.Now().Format(tFormat), fName), "rs.Votes.Prevotes(prs.ProposalPOLRound)", polPrevotes.StringShort2())
 			if ps.PickSendVote(polPrevotes) {
+				logger.Info(fmt.Sprintf("[%s]%s::sent polPrevotes", time.Now().Format(tFormat), fName))
 				logger.Debug("Picked rs.Prevotes(prs.ProposalPOLRound) to send",
 					"round", prs.ProposalPOLRound)
 				return true
@@ -809,21 +843,30 @@ func (conR *Reactor) gossipVotesForHeight(
 	}
 	// If there are prevotes to send...
 	if prs.Step <= cstypes.RoundStepPrevoteWait && prs.Round != -1 && prs.Round <= rs.Round {
-		if ps.PickSendVote(rs.Votes.Prevotes(prs.Round)) {
+		prevotes := rs.Votes.Prevotes(prs.Round)
+		logger.Info(fmt.Sprintf("[%s]%s::try to send prevotes", time.Now().Format(tFormat), fName), "rs.Votes.Prevotes(prs.Round)", prevotes.StringShort2())
+		if ps.PickSendVote(prevotes) {
+			logger.Info(fmt.Sprintf("[%s]%s::sent prevotes", time.Now().Format(tFormat), fName))
 			logger.Debug("Picked rs.Prevotes(prs.Round) to send", "round", prs.Round)
 			return true
 		}
 	}
 	// If there are precommits to send...
 	if prs.Step <= cstypes.RoundStepPrecommitWait && prs.Round != -1 && prs.Round <= rs.Round {
-		if ps.PickSendVote(rs.Votes.Precommits(prs.Round)) {
+		precommits := rs.Votes.Precommits(prs.Round)
+		logger.Info(fmt.Sprintf("[%s]%s::try to send precommits", time.Now().Format(tFormat), fName), "rs.Votes.Precommits(prs.Round)", precommits.StringShort2())
+		if ps.PickSendVote(precommits) {
+			logger.Info(fmt.Sprintf("[%s]%s::sent precommits", time.Now().Format(tFormat), fName))
 			logger.Debug("Picked rs.Precommits(prs.Round) to send", "round", prs.Round)
 			return true
 		}
 	}
 	// If there are prevotes to send...Needed because of validBlock mechanism
 	if prs.Round != -1 && prs.Round <= rs.Round {
-		if ps.PickSendVote(rs.Votes.Prevotes(prs.Round)) {
+		prevotes := rs.Votes.Prevotes(prs.Round)
+		logger.Info(fmt.Sprintf("[%s]%s::try to send prevotes", time.Now().Format(tFormat), fName), "rs.Votes.Prevotes(prs.Round)", prevotes.StringShort2())
+		if ps.PickSendVote(prevotes) {
+			logger.Info(fmt.Sprintf("[%s]%s::sent prevotes", time.Now().Format(tFormat), fName))
 			logger.Debug("Picked rs.Prevotes(prs.Round) to send", "round", prs.Round)
 			return true
 		}
@@ -831,7 +874,9 @@ func (conR *Reactor) gossipVotesForHeight(
 	// If there are POLPrevotes to send...
 	if prs.ProposalPOLRound != -1 {
 		if polPrevotes := rs.Votes.Prevotes(prs.ProposalPOLRound); polPrevotes != nil {
+			logger.Info(fmt.Sprintf("[%s]%s::try to send polPrevotes", time.Now().Format(tFormat), fName), "rs.Votes.Prevotes(prs.ProposalPOLRound)", polPrevotes.StringShort2())
 			if ps.PickSendVote(polPrevotes) {
+				logger.Info(fmt.Sprintf("[%s]%s::sent polPrevotes", time.Now().Format(tFormat), fName))
 				logger.Debug("Picked rs.Prevotes(prs.ProposalPOLRound) to send",
 					"round", prs.ProposalPOLRound)
 				return true
@@ -1011,7 +1056,7 @@ func ReactorMetrics(metrics *Metrics) ReactorOption {
 	return func(conR *Reactor) { conR.Metrics = metrics }
 }
 
-//-----------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 
 var (
 	ErrPeerStateHeightRegression = errors.New("error peer state height regression")
@@ -1147,6 +1192,7 @@ func (ps *PeerState) SetHasProposalBlockPart(height int64, round int32, index in
 func (ps *PeerState) PickSendVote(votes types.VoteSetReader) bool {
 	if vote, ok := ps.PickVoteToSend(votes); ok {
 		ps.logger.Debug("Sending vote message", "ps", ps, "vote", vote)
+		ps.logger.Info(fmt.Sprintf("[%s]PeerState.PickSendVote:: picked vote %s to send", time.Now().Format("15:04:05.000"), vote.String()), "votes", votes.VoteStrings(), "peer", ps.peer.String())
 		if ps.peer.Send(p2p.Envelope{
 			ChannelID: VoteChannel,
 			Message: &cmtcons.Vote{
@@ -1165,10 +1211,14 @@ func (ps *PeerState) PickSendVote(votes types.VoteSetReader) bool {
 // Returns true if a vote was picked.
 // NOTE: `votes` must be the correct Size() for the Height().
 func (ps *PeerState) PickVoteToSend(votes types.VoteSetReader) (vote *types.Vote, ok bool) {
+	tFormat := "15:04:05.000"
+	// ps.logger.Info(fmt.Sprintf("[%s]PeerState.PickVoteToSend:: acquire ps.mtx.Lock", time.Now().Format(tFormat)), "peerState", ps, "votes", votes)
 	ps.mtx.Lock()
+	// ps.logger.Info(fmt.Sprintf("[%s]PeerState.PickVoteToSend:: done acquire ps.mtx.Lock", time.Now().Format(tFormat)))
 	defer ps.mtx.Unlock()
 
 	if votes.Size() == 0 {
+		ps.logger.Info(fmt.Sprintf("[%s]PeerState.PickVoteToSend:: nothing to send", time.Now().Format(tFormat)), "votes.Size", votes.Size())
 		return nil, false
 	}
 
@@ -1182,11 +1232,13 @@ func (ps *PeerState) PickVoteToSend(votes types.VoteSetReader) (vote *types.Vote
 
 	psVotes := ps.getVoteBitArray(height, round, votesType)
 	if psVotes == nil {
+		ps.logger.Info(fmt.Sprintf("[%s]PeerState.PickVoteToSend:: nothing worth to send", time.Now().Format(tFormat)))
 		return nil, false // Not something worth sending
 	}
 	if index, ok := votes.BitArray().Sub(psVotes).PickRandom(); ok {
 		return votes.GetByIndex(int32(index)), true
 	}
+	ps.logger.Info(fmt.Sprintf("[%s]PeerState.PickVoteToSend:: nothing to pick", time.Now().Format(tFormat)))
 	return nil, false
 }
 
@@ -1498,7 +1550,7 @@ func (ps *PeerState) StringIndented(indent string) string {
 		indent)
 }
 
-//-----------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 // Messages
 
 // Message is a message that can be sent and received on the Reactor
@@ -1518,7 +1570,7 @@ func init() {
 	cmtjson.RegisterType(&VoteSetBitsMessage{}, "tendermint/VoteSetBits")
 }
 
-//-------------------------------------
+// -------------------------------------
 
 // NewRoundStepMessage is sent for every step taken in the ConsensusState.
 // For every height/round/step transition
@@ -1577,7 +1629,7 @@ func (m *NewRoundStepMessage) String() string {
 		m.Height, m.Round, m.Step, m.LastCommitRound)
 }
 
-//-------------------------------------
+// -------------------------------------
 
 // NewValidBlockMessage is sent when a validator observes a valid block B in some round r,
 // i.e., there is a Proposal for block B and 2/3+ prevotes for the block B in the round r.
@@ -1621,7 +1673,7 @@ func (m *NewValidBlockMessage) String() string {
 		m.Height, m.Round, m.BlockPartSetHeader, m.BlockParts, m.IsCommit)
 }
 
-//-------------------------------------
+// -------------------------------------
 
 // ProposalMessage is sent when a new block is proposed.
 type ProposalMessage struct {
@@ -1638,7 +1690,7 @@ func (m *ProposalMessage) String() string {
 	return fmt.Sprintf("[Proposal %v]", m.Proposal)
 }
 
-//-------------------------------------
+// -------------------------------------
 
 // ProposalPOLMessage is sent when a previous proposal is re-proposed.
 type ProposalPOLMessage struct {
@@ -1669,7 +1721,7 @@ func (m *ProposalPOLMessage) String() string {
 	return fmt.Sprintf("[ProposalPOL H:%v POLR:%v POL:%v]", m.Height, m.ProposalPOLRound, m.ProposalPOL)
 }
 
-//-------------------------------------
+// -------------------------------------
 
 // BlockPartMessage is sent when gossipping a piece of the proposed block.
 type BlockPartMessage struct {
@@ -1697,7 +1749,7 @@ func (m *BlockPartMessage) String() string {
 	return fmt.Sprintf("[BlockPart H:%v R:%v P:%v]", m.Height, m.Round, m.Part)
 }
 
-//-------------------------------------
+// -------------------------------------
 
 // VoteMessage is sent when voting for a proposal (or lack thereof).
 type VoteMessage struct {
@@ -1714,7 +1766,7 @@ func (m *VoteMessage) String() string {
 	return fmt.Sprintf("[Vote %v]", m.Vote)
 }
 
-//-------------------------------------
+// -------------------------------------
 
 // HasVoteMessage is sent to indicate that a particular vote has been received.
 type HasVoteMessage struct {
@@ -1746,7 +1798,7 @@ func (m *HasVoteMessage) String() string {
 	return fmt.Sprintf("[HasVote VI:%v V:{%v/%02d/%v}]", m.Index, m.Height, m.Round, m.Type)
 }
 
-//-------------------------------------
+// -------------------------------------
 
 // VoteSetMaj23Message is sent to indicate that a given BlockID has seen +2/3 votes.
 type VoteSetMaj23Message struct {
@@ -1778,7 +1830,7 @@ func (m *VoteSetMaj23Message) String() string {
 	return fmt.Sprintf("[VSM23 %v/%02d/%v %v]", m.Height, m.Round, m.Type, m.BlockID)
 }
 
-//-------------------------------------
+// -------------------------------------
 
 // VoteSetBitsMessage is sent to communicate the bit-array of votes seen for the BlockID.
 type VoteSetBitsMessage struct {
@@ -1812,4 +1864,4 @@ func (m *VoteSetBitsMessage) String() string {
 	return fmt.Sprintf("[VSB %v/%02d/%v %v %v]", m.Height, m.Round, m.Type, m.BlockID, m.Votes)
 }
 
-//-------------------------------------
+// -------------------------------------

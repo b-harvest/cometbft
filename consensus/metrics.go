@@ -2,6 +2,7 @@ package consensus
 
 import (
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/go-kit/kit/metrics"
@@ -87,13 +88,13 @@ type Metrics struct {
 	// be above 2/3 of the total voting power of the network defines the endpoint
 	// the endpoint of the interval. Subtract the proposal timestamp from this endpoint
 	// to obtain the quorum delay.
-	//metrics:Interval in seconds between the proposal timestamp and the timestamp of the earliest prevote that achieved a quorum.
+	// metrics:Interval in seconds between the proposal timestamp and the timestamp of the earliest prevote that achieved a quorum.
 	QuorumPrevoteDelay metrics.Gauge `metrics_labels:"proposer_address"`
 
 	// FullPrevoteDelay is the interval in seconds between the proposal
 	// timestamp and the timestamp of the latest prevote in a round where 100%
 	// of the voting power on the network issued prevotes.
-	//metrics:Interval in seconds between the proposal timestamp and the timestamp of the latest prevote in a round where all validators voted.
+	// metrics:Interval in seconds between the proposal timestamp and the timestamp of the latest prevote in a round where all validators voted.
 	FullPrevoteDelay metrics.Gauge `metrics_labels:"proposer_address"`
 
 	// VoteExtensionReceiveCount is the number of vote extensions received by this
@@ -172,4 +173,10 @@ func (m *Metrics) MarkStep(s cstypes.RoundStepType) {
 		m.StepDurationSeconds.With("step", stepName).Observe(stepTime)
 	}
 	m.stepStart = time.Now()
+}
+
+type Counters struct {
+	BlockGossipPartsReceivedNoMatch    atomic.Int32
+	BlockGossipPartsReceivedMatch      atomic.Int32
+	BlockGossipPartsReceivedDuplicated atomic.Int32
 }

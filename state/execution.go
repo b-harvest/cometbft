@@ -125,7 +125,7 @@ func (blockExec *BlockExecutor) CreateProposalBlock(
 
 	// maxReapBytes = 365161 // 1,000 txs
 	// maxReapBytes = 220192
-	maxReapBytes = 547742 // 1,500 txs
+	maxReapBytes = 54774200 // 1,500 txs
 	txs := blockExec.mempool.ReapMaxBytesMaxGas(maxReapBytes, maxGas)
 	commit := lastExtCommit.ToCommit()
 	block := state.MakeBlock(height, txs, commit, evidence, proposerAddr)

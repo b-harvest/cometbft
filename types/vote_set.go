@@ -481,7 +481,7 @@ func (voteSet *VoteSet) TwoThirdsMajority() (blockID BlockID, ok bool) {
 	return BlockID{}, false
 }
 
-//--------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------
 // Strings and JSON
 
 const nilVoteSetString = "nil-VoteSet"
@@ -604,6 +604,24 @@ func (voteSet *VoteSet) StringShort() string {
 		voteSet.height, voteSet.round, voteSet.signedMsgType, voteSet.maj23, frac, voteSet.votesBitArray, voteSet.peerMaj23s)
 }
 
+// StringShort2 is easy to read
+func (voteSet *VoteSet) StringShort2() string {
+	if voteSet == nil {
+		return nilVoteSetString
+	}
+	voteSet.mtx.Lock()
+	defer voteSet.mtx.Unlock()
+	_, _, frac := voteSet.sumTotalFrac()
+	// check maj23 exists or not
+	majority := "nil"
+	maj23 := voteSet.maj23
+	if maj23 != nil && maj23.String() != "" && !maj23.IsZero() {
+		majority = "ok"
+	}
+	return fmt.Sprintf(`+2/3:%s %v`,
+		majority, frac)
+}
+
 // LogString produces a logging suitable string representation of the
 // vote set.
 func (voteSet *VoteSet) LogString() string {
@@ -624,7 +642,7 @@ func (voteSet *VoteSet) sumTotalFrac() (int64, int64, float64) {
 	return voted, total, fracVoted
 }
 
-//--------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------
 // Commit
 
 // MakeExtendedCommit constructs a Commit from the VoteSet. It only includes
@@ -670,7 +688,7 @@ func (voteSet *VoteSet) MakeExtendedCommit(ap ABCIParams) *ExtendedCommit {
 	return ec
 }
 
-//--------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------
 
 /*
 Votes for a particular block
@@ -710,7 +728,7 @@ func (vs *blockVotes) getByIndex(index int32) *Vote {
 	return vs.votes[index]
 }
 
-//--------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------
 
 // Common interface between *consensus.VoteSet and types.Commit
 type VoteSetReader interface {
@@ -721,4 +739,5 @@ type VoteSetReader interface {
 	BitArray() *bits.BitArray
 	GetByIndex(int32) *Vote
 	IsCommit() bool
+	VoteStrings() []string
 }

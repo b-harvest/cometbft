@@ -143,6 +143,9 @@ type State struct {
 	// for reporting metrics
 	metrics *Metrics
 
+	// for tracking abstract resources
+	counters *Counters
+
 	// offline state sync height indicating to which height the node synced offline
 	offlineStateSyncHeight int64
 }
@@ -175,6 +178,7 @@ func NewState(
 		evpool:           evpool,
 		evsw:             cmtevents.NewEventSwitch(),
 		metrics:          NopMetrics(),
+		counters:         &Counters{},
 	}
 	for _, option := range options {
 		option(cs)
@@ -914,9 +918,15 @@ func (cs *State) handleMsg(mi msgInfo) {
 		}
 
 		if err != nil && msg.Round != cs.Round {
-			cs.Logger.Debug(
-				"received block part from wrong round",
-				"height", cs.Height,
+			// cs.Logger.Debug(
+			// 	"received block part from wrong round",
+			// 	"height", cs.Height,
+			// 	"cs_round", cs.Round,
+			// 	"block_round", msg.Round,
+			// )
+			cs.Logger.Error(
+				fmt.Sprintf("[%s]received block part from wrong round", time.Now().Format("15:04:05.000")),
+				"cs_height", cs.Height,
 				"cs_round", cs.Round,
 				"block_round", msg.Round,
 			)
@@ -1961,12 +1971,14 @@ func (cs *State) addProposalBlockPart(msg *BlockPartMessage, peerID p2p.ID) (add
 	if cs.Height != height {
 		cs.Logger.Debug("received block part from wrong height", "height", height, "round", round)
 		cs.metrics.BlockGossipPartsReceived.With("matches_current", "false").Add(1)
+		cs.counters.BlockGossipPartsReceivedNoMatch.Add(1)
 		return false, nil
 	}
 
 	// We're not expecting a block part.
 	if cs.ProposalBlockParts == nil {
 		cs.metrics.BlockGossipPartsReceived.With("matches_current", "false").Add(1)
+		cs.counters.BlockGossipPartsReceivedNoMatch.Add(1)
 		// NOTE: this can happen when we've gone to a higher round and
 		// then receive parts from the previous round - not necessarily a bad peer.
 		cs.Logger.Debug(
@@ -1988,10 +2000,12 @@ func (cs *State) addProposalBlockPart(msg *BlockPartMessage, peerID p2p.ID) (add
 	}
 
 	cs.metrics.BlockGossipPartsReceived.With("matches_current", "true").Add(1)
+	cs.counters.BlockGossipPartsReceivedMatch.Add(1)
 	if !added {
 		// NOTE: we are disregarding possible duplicates above where heights dont match or we're not expecting block parts yet
 		// but between the matches_current = true and false, we have all the info.
 		cs.metrics.DuplicateBlockPart.Add(1)
+		cs.counters.BlockGossipPartsReceivedDuplicated.Add(1)
 	}
 
 	maxBytes := cs.state.ConsensusParams.Block.MaxBytes
@@ -2023,7 +2037,7 @@ func (cs *State) addProposalBlockPart(msg *BlockPartMessage, peerID p2p.ID) (add
 		cs.ProposalBlock = block
 
 		// NOTE: it's possible to receive complete proposal blocks for future rounds without having the proposal
-		cs.Logger.Info(fmt.Sprintf("[%s]received complete proposal block", time.Now().Format("15:04:05.000")), "height", cs.ProposalBlock.Height, "hash", cs.ProposalBlock.Hash())
+		cs.Logger.Info(fmt.Sprintf("[%s]received complete proposal block", time.Now().Format("15:04:05.000")), "height", cs.ProposalBlock.Height, "hash", cs.ProposalBlock.Hash(), "blockTime", cs.ProposalBlock)
 
 		if err := cs.eventBus.PublishEventCompleteProposal(cs.CompleteProposalEvent()); err != nil {
 			cs.Logger.Error("failed publishing event complete proposal", "err", err)
@@ -2120,24 +2134,22 @@ func (cs *State) tryAddVote(vote *types.Vote, peerID p2p.ID) (bool, error) {
 }
 
 func (cs *State) addVote(vote *types.Vote, peerID p2p.ID) (added bool, err error) {
-	cs.Logger.Debug(
-		"adding vote",
-		"vote_height", vote.Height,
-		"vote_type", vote.Type,
-		"val_index", vote.ValidatorIndex,
-		"cs_height", cs.Height,
-		"extLen", len(vote.Extension),
-		"extSigLen", len(vote.ExtensionSignature),
-	)
+	// cs.Logger.Debug(
+	// 	"adding vote",
+	// 	"vote_height", vote.Height,
+	// 	"vote_type", vote.Type,
+	// 	"val_index", vote.ValidatorIndex,
+	// 	"cs_height", cs.Height,
+	// 	"extLen", len(vote.Extension),
+	// 	"extSigLen", len(vote.ExtensionSignature),
+	// )
+	tNow := time.Now()
 	cs.Logger.Info(
-		fmt.Sprintf("[%s]adding vote", time.Now().Format("15:04:05.000")),
-		"vote_height", vote.Height,
-		"vote_type", vote.Type,
-		"val_index", vote.ValidatorIndex,
+		fmt.Sprintf("[%s]adding vote from %d (%s passed)", tNow.Format("15:04:05.000"), vote.ValidatorIndex, "vote_timestamp", tNow.Sub(vote.Timestamp).Milliseconds()),
 		"cs_height", cs.Height,
-		"extLen", len(vote.Extension),
-		"extSigLen", len(vote.ExtensionSignature),
-		"peerID", peerID,
+		"vote_type", vote.Type,
+		"vote_height", vote.Height,
+		"vote_timestamp", vote.Timestamp.Format("15:04:05.000"),
 	)
 
 	if vote.Height < cs.Height || (vote.Height == cs.Height && vote.Round < cs.Round) {
@@ -2149,7 +2161,8 @@ func (cs *State) addVote(vote *types.Vote, peerID p2p.ID) (added bool, err error
 	if vote.Height+1 == cs.Height && vote.Type == cmtproto.PrecommitType {
 		if cs.Step != cstypes.RoundStepNewHeight {
 			// Late precommit at prior height is ignored
-			cs.Logger.Debug("precommit vote came in after commit timeout and has been ignored", "vote", vote)
+			// cs.Logger.Debug("precommit vote came in after commit timeout and has been ignored", "vote", vote)
+			cs.Logger.Info(fmt.Sprintf("[%s]precommit vote came in after commit timeout and has been ignored", time.Now().Format("15:04:05.000")))
 			return added, err
 		}
 
@@ -2162,7 +2175,8 @@ func (cs *State) addVote(vote *types.Vote, peerID p2p.ID) (added bool, err error
 			return added, err
 		}
 
-		cs.Logger.Debug("added vote to last precommits", "last_commit", cs.LastCommit.StringShort())
+		// cs.Logger.Debug("added vote to last precommits", "last_commit", cs.LastCommit.StringShort())
+		cs.Logger.Info(fmt.Sprintf("[%s]added vote to last precommits", time.Now().Format("15:04:05.000")), "last_commits", cs.LastCommit.LogString())
 		if err := cs.eventBus.PublishEventVote(types.EventDataVote{Vote: vote}); err != nil {
 			return added, err
 		}
@@ -2182,7 +2196,8 @@ func (cs *State) addVote(vote *types.Vote, peerID p2p.ID) (added bool, err error
 	// Height mismatch is ignored.
 	// Not necessarily a bad peer, but not favorable behavior.
 	if vote.Height != cs.Height {
-		cs.Logger.Debug("vote ignored and not added", "vote_height", vote.Height, "cs_height", cs.Height, "peer", peerID)
+		// cs.Logger.Debug("vote ignored and not added", "vote_height", vote.Height, "cs_height", cs.Height, "peer", peerID)
+		cs.Logger.Info(fmt.Sprintf("[%s]vote ignored and not added", time.Now().Format("15:04:05.000")))
 		return added, err
 	}
 
@@ -2254,8 +2269,8 @@ func (cs *State) addVote(vote *types.Vote, peerID p2p.ID) (added bool, err error
 	switch vote.Type {
 	case cmtproto.PrevoteType:
 		prevotes := cs.Votes.Prevotes(vote.Round)
-		cs.Logger.Debug("added vote to prevote", "vote", vote, "prevotes", prevotes.StringShort())
-		cs.Logger.Info(fmt.Sprintf("[%s] added vote to prevote", time.Now().Format("15:04:05.000")), "vote", vote, "prevotes_size", prevotes.Size(), "prevotes", prevotes.StringShort())
+		// cs.Logger.Debug("added vote to prevote", "vote", vote, "prevotes", prevotes.StringShort())
+		cs.Logger.Info(fmt.Sprintf("[%s]added vote to prevote", time.Now().Format("15:04:05.000")), "prevotes", prevotes.LogString())
 
 		// If +2/3 prevotes for a block or nil for *any* round:
 		if blockID, ok := prevotes.TwoThirdsMajority(); ok {
@@ -2334,19 +2349,13 @@ func (cs *State) addVote(vote *types.Vote, peerID p2p.ID) (added bool, err error
 
 	case cmtproto.PrecommitType:
 		precommits := cs.Votes.Precommits(vote.Round)
-		cs.Logger.Debug("added vote to precommit",
-			"height", vote.Height,
-			"round", vote.Round,
-			"validator", vote.ValidatorAddress.String(),
-			"vote_timestamp", vote.Timestamp,
-			"data", precommits.LogString())
-		cs.Logger.Info(fmt.Sprintf("[%s] added vote to precommit", time.Now().Format("15:04:05.000")),
-			"height", vote.Height,
-			"round", vote.Round,
-			"validator", vote.ValidatorAddress.String(),
-			"vote_timestamp", vote.Timestamp,
-			"precommits_size", precommits.Size(),
-			"data", precommits.LogString())
+		// cs.Logger.Debug("added vote to precommit",
+		// 	"height", vote.Height,
+		// 	"round", vote.Round,
+		// 	"validator", vote.ValidatorAddress.String(),
+		// 	"vote_timestamp", vote.Timestamp,
+		// 	"data", precommits.LogString())
+		cs.Logger.Info(fmt.Sprintf("[%s]added vote to precommit", time.Now().Format("15:04:05.000")), "precommits", precommits.LogString())
 
 		blockID, ok := precommits.TwoThirdsMajority()
 		if ok {
@@ -2482,8 +2491,8 @@ func (cs *State) signAddVote(
 			hasExt, extEnabled, vote.Height, vote.Type))
 	}
 	cs.sendInternalMessage(msgInfo{&VoteMessage{vote}, ""})
-	cs.Logger.Debug("signed and pushed vote", "height", cs.Height, "round", cs.Round, "vote", vote)
-	cs.Logger.Info(fmt.Sprintf("[%s]signed and pushed vote", time.Now().Format("15:04:05.000")), "height", cs.Height, "round", cs.Round, "vote", vote)
+	// cs.Logger.Debug("signed and pushed vote", "height", cs.Height, "round", cs.Round, "vote", vote)
+	cs.Logger.Info(fmt.Sprintf("[%s]signed and pushed vote", time.Now().Format("15:04:05.000")), "vote_type", vote.Type)
 }
 
 // updatePrivValidatorPubKey get's the private validator public key and
