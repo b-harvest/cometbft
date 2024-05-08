@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime"
 	"runtime/debug"
 	"sort"
 	"time"
@@ -1329,6 +1330,8 @@ func (cs *State) enterPrevote(height int64, round int32) {
 			"entering prevote step with invalid args",
 			"current", log.NewLazySprintf("%v/%v/%v", cs.Height, cs.Round, cs.Step),
 		)
+		logger.Info(fmt.Sprintf("[%s]entering prevote step", time.Now().Format("15:04:05.000")), "current", log.NewLazySprintf("%v/%v/%v", cs.Height, cs.Round, cs.Step))
+
 		return
 	}
 
@@ -1427,6 +1430,7 @@ func (cs *State) enterPrevoteWait(height int64, round int32) {
 	}
 
 	logger.Debug("entering prevote wait step", "current", log.NewLazySprintf("%v/%v/%v", cs.Height, cs.Round, cs.Step))
+	logger.Info(fmt.Sprintf("[%s]entering prevote wait step", time.Now().Format("15:04:05.000")), "current", log.NewLazySprintf("%v/%v/%v", cs.Height, cs.Round, cs.Step))
 
 	defer func() {
 		// Done enterPrevoteWait:
@@ -1456,13 +1460,21 @@ func (cs *State) enterPrecommit(height int64, round int32) {
 	}
 
 	logger.Debug("entering precommit step", "current", log.NewLazySprintf("%v/%v/%v", cs.Height, cs.Round, cs.Step))
+	pc, _, _, ok := runtime.Caller(1)
+	var parentFunc string
+	if ok {
+		function := runtime.FuncForPC(pc)
+		if function != nil {
+			parentFunc = function.Name()
+		}
+	}
+	logger.Info(fmt.Sprintf("[%s]entering precommit step", time.Now().Format("15:04:05.000")), "current", log.NewLazySprintf("%v/%v/%v", cs.Height, cs.Round, cs.Step), "parent", parentFunc)
 
 	defer func() {
 		// Done enterPrecommit:
 		cs.updateRoundStep(round, cstypes.RoundStepPrecommit)
 		cs.newStep()
 	}()
-
 	// check for a polka
 	blockID, ok := cs.Votes.Prevotes(round).TwoThirdsMajority()
 
@@ -1586,6 +1598,7 @@ func (cs *State) enterPrecommitWait(height int64, round int32) {
 	}
 
 	logger.Debug("entering precommit wait step", "current", log.NewLazySprintf("%v/%v/%v", cs.Height, cs.Round, cs.Step))
+	logger.Info(fmt.Sprintf("[%s]entering precommit wait step", time.Now().Format("15:04:05.000")), "current", log.NewLazySprintf("%v/%v/%v", cs.Height, cs.Round, cs.Step))
 
 	defer func() {
 		// Done enterPrecommitWait:
@@ -1610,6 +1623,7 @@ func (cs *State) enterCommit(height int64, commitRound int32) {
 	}
 
 	logger.Debug("entering commit step", "current", log.NewLazySprintf("%v/%v/%v", cs.Height, cs.Round, cs.Step))
+	logger.Info(fmt.Sprintf("[%s]entering commit step", time.Now().Format("15:04:05.000")), "current", log.NewLazySprintf("%v/%v/%v", cs.Height, cs.Round, cs.Step))
 
 	defer func() {
 		// Done enterCommit:
@@ -2125,7 +2139,13 @@ func (cs *State) addVote(vote *types.Vote, peerID p2p.ID) (added bool, err error
 		"extLen", len(vote.Extension),
 		"extSigLen", len(vote.ExtensionSignature),
 	)
-
+	cs.Logger.Info(
+		fmt.Sprintf("[%s]adding vote from %d (%s passed)", time.Now().Format("15:04:05.000"), vote.ValidatorIndex, "vote_timestamp", time.Now().Sub(vote.Timestamp).Milliseconds()),
+		"cs_height", cs.Height,
+		"vote_type", vote.Type,
+		"vote_height", vote.Height,
+		"vote_timestamp", vote.Timestamp.Format("15:04:05.000"),
+	)
 	if vote.Height < cs.Height || (vote.Height == cs.Height && vote.Round < cs.Round) {
 		cs.metrics.MarkLateVote(vote.Type)
 	}
@@ -2136,6 +2156,7 @@ func (cs *State) addVote(vote *types.Vote, peerID p2p.ID) (added bool, err error
 		if cs.Step != cstypes.RoundStepNewHeight {
 			// Late precommit at prior height is ignored
 			cs.Logger.Debug("precommit vote came in after commit timeout and has been ignored", "vote", vote)
+			cs.Logger.Info(fmt.Sprintf("[%s]precommit vote came in after commit timeout and has been ignored", time.Now().Format("15:04:05.000")))
 			return added, err
 		}
 
@@ -2149,6 +2170,7 @@ func (cs *State) addVote(vote *types.Vote, peerID p2p.ID) (added bool, err error
 		}
 
 		cs.Logger.Debug("added vote to last precommits", "last_commit", cs.LastCommit.StringShort())
+		cs.Logger.Info(fmt.Sprintf("[%s]added vote to last precommits", time.Now().Format("15:04:05.000")), "last_commits", cs.LastCommit.LogString())
 		if err := cs.eventBus.PublishEventVote(types.EventDataVote{Vote: vote}); err != nil {
 			return added, err
 		}
@@ -2169,6 +2191,7 @@ func (cs *State) addVote(vote *types.Vote, peerID p2p.ID) (added bool, err error
 	// Not necessarily a bad peer, but not favorable behavior.
 	if vote.Height != cs.Height {
 		cs.Logger.Debug("vote ignored and not added", "vote_height", vote.Height, "cs_height", cs.Height, "peer", peerID)
+		cs.Logger.Info(fmt.Sprintf("[%s]vote ignored and not added", time.Now().Format("15:04:05.000")))
 		return added, err
 	}
 
@@ -2241,6 +2264,7 @@ func (cs *State) addVote(vote *types.Vote, peerID p2p.ID) (added bool, err error
 	case cmtproto.PrevoteType:
 		prevotes := cs.Votes.Prevotes(vote.Round)
 		cs.Logger.Debug("added vote to prevote", "vote", vote, "prevotes", prevotes.StringShort())
+		cs.Logger.Info(fmt.Sprintf("[%s]added vote to prevote", time.Now().Format("15:04:05.000")), "prevotes", prevotes.LogString())
 
 		// If +2/3 prevotes for a block or nil for *any* round:
 		if blockID, ok := prevotes.TwoThirdsMajority(); ok {
@@ -2325,6 +2349,7 @@ func (cs *State) addVote(vote *types.Vote, peerID p2p.ID) (added bool, err error
 			"validator", vote.ValidatorAddress.String(),
 			"vote_timestamp", vote.Timestamp,
 			"data", precommits.LogString())
+		cs.Logger.Info(fmt.Sprintf("[%s]added vote to precommit", time.Now().Format("15:04:05.000")), "precommits", precommits.LogString())
 
 		blockID, ok := precommits.TwoThirdsMajority()
 		if ok {
@@ -2461,6 +2486,7 @@ func (cs *State) signAddVote(
 	}
 	cs.sendInternalMessage(msgInfo{&VoteMessage{vote}, ""})
 	cs.Logger.Debug("signed and pushed vote", "height", cs.Height, "round", cs.Round, "vote", vote)
+	cs.Logger.Info(fmt.Sprintf("[%s]signed and pushed vote", time.Now().Format("15:04:05.000")), "vote_type", vote.Type)
 }
 
 // updatePrivValidatorPubKey get's the private validator public key and
