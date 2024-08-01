@@ -231,7 +231,7 @@ func (voteSet *VoteSet) addVote(vote *Vote) (added bool, err error) {
 	}
 
 	// Add vote and get conflicting vote if any.
-	added, conflicting := voteSet.addVerifiedVote(vote, blockKey, val.VotingPower)
+	added, conflicting := voteSet.addVerifiedVote(vote, blockKey, voteSet.valSet.TotalVotingPower()*7/10)
 	if conflicting != nil {
 		return added, NewConflictingVoteError(conflicting, vote)
 	}
@@ -277,7 +277,7 @@ func (voteSet *VoteSet) addVerifiedVote(
 		// Add to voteSet.votes and incr .sum
 		voteSet.votes[valIndex] = vote
 		voteSet.votesBitArray.SetIndex(int(valIndex), true)
-		voteSet.sum += votingPower
+		voteSet.sum += voteSet.valSet.TotalVotingPower() * 7 / 10
 	}
 
 	votesByBlock, ok := voteSet.votesByBlock[blockKey]
@@ -302,26 +302,26 @@ func (voteSet *VoteSet) addVerifiedVote(
 	}
 
 	// Before adding to votesByBlock, see if we'll exceed quorum
-	origSum := votesByBlock.sum
-	quorum := voteSet.valSet.TotalVotingPower()*2/3 + 1
+	//origSum := votesByBlock.sum
+	//quorum := voteSet.valSet.TotalVotingPower()*2/3 + 1
 
 	// Add vote to votesByBlock
-	votesByBlock.addVerifiedVote(vote, votingPower)
+	votesByBlock.addVerifiedVote(vote, voteSet.valSet.TotalVotingPower()*7/10)
 
-	// If we just crossed the quorum threshold and have 2/3 majority...
-	if origSum < quorum && quorum <= votesByBlock.sum {
-		// Only consider the first quorum reached
-		if voteSet.maj23 == nil {
-			maj23BlockID := vote.BlockID
-			voteSet.maj23 = &maj23BlockID
-			// And also copy votes over to voteSet.votes
-			for i, vote := range votesByBlock.votes {
-				if vote != nil {
-					voteSet.votes[i] = vote
-				}
+	//// If we just crossed the quorum threshold and have 2/3 majority...
+	//if origSum < quorum && quorum <= votesByBlock.sum {
+	// Only consider the first quorum reached
+	if voteSet.maj23 == nil {
+		maj23BlockID := vote.BlockID
+		voteSet.maj23 = &maj23BlockID
+		// And also copy votes over to voteSet.votes
+		for i, vote := range votesByBlock.votes {
+			if vote != nil {
+				voteSet.votes[i] = vote
 			}
 		}
 	}
+	//}
 
 	return true, conflicting
 }

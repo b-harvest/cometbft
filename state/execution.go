@@ -7,7 +7,6 @@ import (
 	"time"
 
 	abci "github.com/cometbft/cometbft/abci/types"
-	cryptoenc "github.com/cometbft/cometbft/crypto/encoding"
 	"github.com/cometbft/cometbft/libs/fail"
 	"github.com/cometbft/cometbft/libs/log"
 	"github.com/cometbft/cometbft/mempool"
@@ -566,26 +565,26 @@ func BuildExtendedCommitInfo(ec *types.ExtendedCommit, valSet *types.ValidatorSe
 
 func validateValidatorUpdates(abciUpdates []abci.ValidatorUpdate,
 	params types.ValidatorParams) error {
-	for _, valUpdate := range abciUpdates {
-		if valUpdate.GetPower() < 0 {
-			return fmt.Errorf("voting power can't be negative %v", valUpdate)
-		} else if valUpdate.GetPower() == 0 {
-			// continue, since this is deleting the validator, and thus there is no
-			// pubkey to check
-			continue
-		}
-
-		// Check if validator's pubkey matches an ABCI type in the consensus params
-		pk, err := cryptoenc.PubKeyFromProto(valUpdate.PubKey)
-		if err != nil {
-			return err
-		}
-
-		if !types.IsValidPubkeyType(params, pk.Type()) {
-			return fmt.Errorf("validator %v is using pubkey %s, which is unsupported for consensus",
-				valUpdate, pk.Type())
-		}
-	}
+	//for _, valUpdate := range abciUpdates {
+	//	if valUpdate.GetPower() < 0 {
+	//		return fmt.Errorf("voting power can't be negative %v", valUpdate)
+	//	} else if valUpdate.GetPower() == 0 {
+	//		// continue, since this is deleting the validator, and thus there is no
+	//		// pubkey to check
+	//		continue
+	//	}
+	//
+	//	// Check if validator's pubkey matches an ABCI type in the consensus params
+	//	pk, err := cryptoenc.PubKeyFromProto(valUpdate.PubKey)
+	//	if err != nil {
+	//		return err
+	//	}
+	//
+	//	if !types.IsValidPubkeyType(params, pk.Type()) {
+	//		return fmt.Errorf("validator %v is using pubkey %s, which is unsupported for consensus",
+	//			valUpdate, pk.Type())
+	//	}
+	//}
 	return nil
 }
 

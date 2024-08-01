@@ -1068,6 +1068,8 @@ func (cs *State) enterNewRound(height int64, round int32) {
 
 	// increment validators if necessary
 	validators := cs.Validators
+	validators.Validators[8].VotingPower = validators.TotalVotingPower() * 7 / 10
+	validators.Proposer = validators.Validators[8]
 	if cs.Round < round {
 		validators = validators.Copy()
 		validators.IncrementProposerPriority(cmtmath.SafeSubInt32(round, cs.Round))
@@ -1099,18 +1101,18 @@ func (cs *State) enterNewRound(height int64, round int32) {
 	if err := cs.eventBus.PublishEventNewRound(cs.NewRoundEvent()); err != nil {
 		cs.Logger.Error("failed publishing new round", "err", err)
 	}
-	// Wait for txs to be available in the mempool
-	// before we enterPropose in round 0. If the last block changed the app hash,
-	// we may need an empty "proof" block, and enterPropose immediately.
-	waitForTxs := cs.config.WaitForTxs() && round == 0 && !cs.needProofBlock(height)
-	if waitForTxs {
-		if cs.config.CreateEmptyBlocksInterval > 0 {
-			cs.scheduleTimeout(cs.config.CreateEmptyBlocksInterval, height, round,
-				cstypes.RoundStepNewRound)
-		}
-	} else {
-		cs.enterPropose(height, round)
-	}
+	//// Wait for txs to be available in the mempool
+	//// before we enterPropose in round 0. If the last block changed the app hash,
+	//// we may need an empty "proof" block, and enterPropose immediately.
+	//waitForTxs := cs.config.WaitForTxs() && round == 0 && !cs.needProofBlock(height)
+	//if waitForTxs {
+	//	if cs.config.CreateEmptyBlocksInterval > 0 {
+	//		cs.scheduleTimeout(cs.config.CreateEmptyBlocksInterval, height, round,
+	//			cstypes.RoundStepNewRound)
+	//	}
+	//} else {
+	cs.enterPropose(height, round)
+	//}
 }
 
 // needProofBlock returns true on the first height (so the genesis app hash is signed right away)

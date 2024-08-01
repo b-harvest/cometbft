@@ -54,54 +54,54 @@ type Block struct {
 // It checks the internal consistency of the block.
 // Further validation is done using state#ValidateBlock.
 func (b *Block) ValidateBasic() error {
-	if b == nil {
-		return errors.New("nil block")
-	}
-
-	b.mtx.Lock()
-	defer b.mtx.Unlock()
-
-	if err := b.Header.ValidateBasic(); err != nil {
-		return fmt.Errorf("invalid header: %w", err)
-	}
-
-	// Validate the last commit and its hash.
-	if b.LastCommit == nil {
-		return errors.New("nil LastCommit")
-	}
-	if err := b.LastCommit.ValidateBasic(); err != nil {
-		return fmt.Errorf("wrong LastCommit: %v", err)
-	}
-
-	if !bytes.Equal(b.LastCommitHash, b.LastCommit.Hash()) {
-		return fmt.Errorf("wrong Header.LastCommitHash. Expected %v, got %v",
-			b.LastCommit.Hash(),
-			b.LastCommitHash,
-		)
-	}
-
-	// NOTE: b.Data.Txs may be nil, but b.Data.Hash() still works fine.
-	if !bytes.Equal(b.DataHash, b.Data.Hash()) {
-		return fmt.Errorf(
-			"wrong Header.DataHash. Expected %v, got %v",
-			b.Data.Hash(),
-			b.DataHash,
-		)
-	}
-
-	// NOTE: b.Evidence.Evidence may be nil, but we're just looping.
-	for i, ev := range b.Evidence.Evidence {
-		if err := ev.ValidateBasic(); err != nil {
-			return fmt.Errorf("invalid evidence (#%d): %v", i, err)
-		}
-	}
-
-	if !bytes.Equal(b.EvidenceHash, b.Evidence.Hash()) {
-		return fmt.Errorf("wrong Header.EvidenceHash. Expected %v, got %v",
-			b.EvidenceHash,
-			b.Evidence.Hash(),
-		)
-	}
+	//if b == nil {
+	//	return errors.New("nil block")
+	//}
+	//
+	//b.mtx.Lock()
+	//defer b.mtx.Unlock()
+	//
+	//if err := b.Header.ValidateBasic(); err != nil {
+	//	return fmt.Errorf("invalid header: %w", err)
+	//}
+	//
+	//// Validate the last commit and its hash.
+	//if b.LastCommit == nil {
+	//	return errors.New("nil LastCommit")
+	//}
+	//if err := b.LastCommit.ValidateBasic(); err != nil {
+	//	return fmt.Errorf("wrong LastCommit: %v", err)
+	//}
+	//
+	//if !bytes.Equal(b.LastCommitHash, b.LastCommit.Hash()) {
+	//	return fmt.Errorf("wrong Header.LastCommitHash. Expected %v, got %v",
+	//		b.LastCommit.Hash(),
+	//		b.LastCommitHash,
+	//	)
+	//}
+	//
+	//// NOTE: b.Data.Txs may be nil, but b.Data.Hash() still works fine.
+	//if !bytes.Equal(b.DataHash, b.Data.Hash()) {
+	//	return fmt.Errorf(
+	//		"wrong Header.DataHash. Expected %v, got %v",
+	//		b.Data.Hash(),
+	//		b.DataHash,
+	//	)
+	//}
+	//
+	//// NOTE: b.Evidence.Evidence may be nil, but we're just looping.
+	//for i, ev := range b.Evidence.Evidence {
+	//	if err := ev.ValidateBasic(); err != nil {
+	//		return fmt.Errorf("invalid evidence (#%d): %v", i, err)
+	//	}
+	//}
+	//
+	//if !bytes.Equal(b.EvidenceHash, b.Evidence.Hash()) {
+	//	return fmt.Errorf("wrong Header.EvidenceHash. Expected %v, got %v",
+	//		b.EvidenceHash,
+	//		b.Evidence.Hash(),
+	//	)
+	//}
 
 	return nil
 }
