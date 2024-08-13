@@ -1060,7 +1060,7 @@ func (cs *State) enterNewRound(height int64, round int32) {
 		return
 	}
 
-	if round >= types.PriorityResetRound || height%types.PriorityResetHeightInterval == 0 {
+	if round%types.PriorityResetRound == 0 || height%types.PriorityResetHeightInterval == 0 {
 		cs.Validators.ResetPriorities()
 	}
 
