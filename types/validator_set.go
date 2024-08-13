@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"runtime"
 	"sort"
 	"strings"
 
@@ -125,6 +126,18 @@ func (vals *ValidatorSet) IncrementProposerPriority(times int32) {
 		panic("Cannot call IncrementProposerPriority with non-positive times")
 	}
 
+	// print parent call stack
+	pc, _, _, ok := runtime.Caller(1)
+	gpc, _, _, ok := runtime.Caller(2)
+	ggpc, _, _, ok := runtime.Caller(3)
+	if ok {
+		fn := runtime.FuncForPC(pc)
+		gfn := runtime.FuncForPC(gpc)
+		ggfn := runtime.FuncForPC(ggpc)
+		fmt.Printf("parent call stacks: %s --> %s --> %s\n", ggfn.Name(), gfn.Name(), fn.Name())
+	}
+	fmt.Println("IncrementProposerPriority ", times)
+	fmt.Printf("before: %s\n", vals.String())
 	// Cap the difference between priorities to be proportional to 2*totalPower by
 	// re-normalizing priorities, i.e., rescale all priorities by multiplying with:
 	//  2*totalVotingPower/(maxPriority - minPriority)
@@ -139,6 +152,7 @@ func (vals *ValidatorSet) IncrementProposerPriority(times int32) {
 	}
 
 	vals.Proposer = proposer
+	fmt.Printf("after: %s\n", vals.String())
 }
 
 // RescalePriorities rescales the priorities such that the distance between the
@@ -637,9 +651,12 @@ func (vals *ValidatorSet) updateWithChangeSet(changes []*Validator, allowDeletes
 
 	vals.updateTotalVotingPower() // will panic if total voting power > MaxTotalVotingPower
 
+	fmt.Println("updateWithChangeSet")
+	fmt.Printf("before: %s\n", vals.String())
 	// Scale and center.
 	vals.RescalePriorities(PriorityWindowSizeFactor * vals.TotalVotingPower())
 	vals.shiftByAvgProposerPriority()
+	fmt.Printf("after: %s\n", vals.String())
 
 	sort.Sort(ValidatorsByVotingPower(vals.Validators))
 

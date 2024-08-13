@@ -527,6 +527,7 @@ FOR_LOOP:
 
 			// TODO: same thing for app - but we would need a way to
 			// get the hash without persisting the state
+			bcR.Logger.Info("Syncing verified block", "Validators", state.Validators.String(), "NextValidators", state.NextValidators.String(), "LastValidators", state.LastValidators.String(), "Height", first.Height, "Hash", first.Hash())
 			state, err = bcR.blockExec.ApplyVerifiedBlock(state, firstID, first)
 			if err != nil {
 				// TODO This is bad, are we zombie?

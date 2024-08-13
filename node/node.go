@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	_ "net/http/pprof" //nolint: gosec
 	"os"
 	"time"
 
@@ -38,8 +39,6 @@ import (
 	"github.com/cometbft/cometbft/types"
 	cmttime "github.com/cometbft/cometbft/types/time"
 	"github.com/cometbft/cometbft/version"
-
-	_ "net/http/pprof" //nolint: gosec
 )
 
 // Node is the highest level interface to a full CometBFT node.
@@ -307,6 +306,7 @@ func NewNodeWithContext(ctx context.Context,
 		return nil, err
 	}
 
+	logger.Info("Starting CometBFT Node", "Validators", state.Validators.String(), "LastValidators", state.LastValidators.String(), "NextValidators", state.NextValidators.String(), "LsatBlockHeight", state.LastBlockHeight)
 	csMetrics, p2pMetrics, memplMetrics, smMetrics, abciMetrics, bsMetrics, ssMetrics := metricsProvider(genDoc.ChainID)
 
 	// Create the proxyApp and establish connections to the ABCI app (consensus, mempool, query).

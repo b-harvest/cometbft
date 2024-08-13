@@ -1060,6 +1060,12 @@ func (cs *State) enterNewRound(height int64, round int32) {
 		return
 	}
 
+	if round < 3 {
+		logger.Info("entering new round < 3, skipping")
+	} else {
+		logger.Info("entering new round >= 3, proceeding")
+	}
+
 	if now := cmttime.Now(); cs.StartTime.After(now) {
 		logger.Debug("need to set a buffer and log message here for sanity", "start_time", cs.StartTime, "now", now)
 	}
@@ -1069,6 +1075,7 @@ func (cs *State) enterNewRound(height int64, round int32) {
 	// increment validators if necessary
 	validators := cs.Validators
 	if cs.Round < round {
+		logger.Info("cs.Round < round", "cs.Round", cs.Round, "round", round)
 		validators = validators.Copy()
 		validators.IncrementProposerPriority(cmtmath.SafeSubInt32(round, cs.Round))
 	}
@@ -1088,7 +1095,7 @@ func (cs *State) enterNewRound(height int64, round int32) {
 		cs.ProposalBlockParts = nil
 	}
 
-	logger.Debug("entering new round",
+	logger.Info("entering new round",
 		"previous", log.NewLazySprintf("%v/%v/%v", prevHeight, prevRound, prevStep),
 		"proposer", propAddress,
 	)
@@ -1343,6 +1350,11 @@ func (cs *State) enterPrevote(height int64, round int32) {
 
 func (cs *State) defaultDoPrevote(height int64, round int32) {
 	logger := cs.Logger.With("height", height, "round", round)
+	if round < 3 {
+		logger.Info("defaultDoPrevote; skipping round < 3")
+		cs.signAddVote(cmtproto.PrevoteType, nil, types.PartSetHeader{}, nil)
+		return
+	}
 
 	// If a block is locked, prevote that.
 	if cs.LockedBlock != nil {
