@@ -1,7 +1,6 @@
 package main
 
 import (
-	"math"
 	"os"
 	"path/filepath"
 
@@ -10,14 +9,10 @@ import (
 	cfg "github.com/cometbft/cometbft/config"
 	"github.com/cometbft/cometbft/libs/cli"
 	nm "github.com/cometbft/cometbft/node"
-	"github.com/cometbft/cometbft/types"
 )
 
 func main() {
 	rootCmd := cmd.RootCmd
-	rootCmd.PersistentFlags().Int64Var(&types.PriorityResetHeight, "reset-priority-height", math.MaxInt64, "reset priority height")
-	rootCmd.PersistentFlags().Int64Var(&types.PriorityResetHeightInterval, "reset-priority-height-interval", 100, "reset priority height interval")
-	rootCmd.PersistentFlags().Int32Var(&types.PriorityResetRoundInterval, "reset-priority-round-interval", 20, "reset priority round interval")
 	rootCmd.AddCommand(
 		cmd.GenValidatorCmd,
 		cmd.InitFilesCmd,
