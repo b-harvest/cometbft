@@ -1060,10 +1060,6 @@ func (cs *State) enterNewRound(height int64, round int32) {
 		return
 	}
 
-	if (round > 0 && round%types.PriorityResetRoundInterval == 0) || height%types.PriorityResetHeightInterval == 0 {
-		cs.Validators.ResetPriorities()
-	}
-
 	if now := cmttime.Now(); cs.StartTime.After(now) {
 		logger.Debug("need to set a buffer and log message here for sanity", "start_time", cs.StartTime, "now", now)
 	}
@@ -1077,6 +1073,9 @@ func (cs *State) enterNewRound(height int64, round int32) {
 		validators.IncrementProposerPriority(cmtmath.SafeSubInt32(round, cs.Round))
 	}
 
+	if (round > 0 && round%types.PriorityResetRoundInterval == 0) || height%types.PriorityResetHeightInterval == 0 {
+		validators.ResetPriorities()
+	}
 	// Setup new round
 	// we don't fire newStep for this step,
 	// but we fire an event, so update the round step first
