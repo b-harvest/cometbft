@@ -307,6 +307,7 @@ func NewNodeWithContext(ctx context.Context,
 	}
 
 	if (state.LastBlockHeight+1)%types.PriorityResetHeightInterval == 0 {
+		state.Validators.ResetPriorities()
 		state.NextValidators.ResetPriorities()
 	}
 
