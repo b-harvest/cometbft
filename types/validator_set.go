@@ -367,6 +367,12 @@ func (vals *ValidatorSet) Iterate(fn func(index int, val *Validator) bool) {
 	}
 }
 
+func (vals *ValidatorSet) ResetPriorities() {
+	for _, val := range vals.Validators {
+		val.ProposerPriority = 0
+	}
+}
+
 // Checks changes against duplicates, splits the changes in updates and
 // removals, sorts them by address.
 //

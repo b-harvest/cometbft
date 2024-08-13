@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	_ "net/http/pprof" //nolint: gosec
 	"os"
 	"time"
 
@@ -38,8 +39,6 @@ import (
 	"github.com/cometbft/cometbft/types"
 	cmttime "github.com/cometbft/cometbft/types/time"
 	"github.com/cometbft/cometbft/version"
-
-	_ "net/http/pprof" //nolint: gosec
 )
 
 // Node is the highest level interface to a full CometBFT node.
@@ -305,6 +304,10 @@ func NewNodeWithContext(ctx context.Context,
 	state, genDoc, err := LoadStateFromDBOrGenesisDocProvider(stateDB, genesisDocProvider)
 	if err != nil {
 		return nil, err
+	}
+
+	if (state.LastBlockHeight+1)%types.PriorityResetHeightInterval == 0 {
+		state.NextValidators.ResetPriorities()
 	}
 
 	csMetrics, p2pMetrics, memplMetrics, smMetrics, abciMetrics, bsMetrics, ssMetrics := metricsProvider(genDoc.ChainID)

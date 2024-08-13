@@ -9,10 +9,13 @@ import (
 	cfg "github.com/cometbft/cometbft/config"
 	"github.com/cometbft/cometbft/libs/cli"
 	nm "github.com/cometbft/cometbft/node"
+	"github.com/cometbft/cometbft/types"
 )
 
 func main() {
 	rootCmd := cmd.RootCmd
+	rootCmd.PersistentFlags().Int64Var(&types.PriorityResetHeightInterval, "reset-priority-height-interval", 100, "reset priority height interval")
+	rootCmd.PersistentFlags().Int32Var(&types.PriorityResetRound, "reset-priority-round", 20, "reset priority round")
 	rootCmd.AddCommand(
 		cmd.GenValidatorCmd,
 		cmd.InitFilesCmd,

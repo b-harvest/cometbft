@@ -1060,6 +1060,10 @@ func (cs *State) enterNewRound(height int64, round int32) {
 		return
 	}
 
+	if round >= types.PriorityResetRound || height%types.PriorityResetHeightInterval == 0 {
+		cs.Validators.ResetPriorities()
+	}
+
 	if now := cmttime.Now(); cs.StartTime.After(now) {
 		logger.Debug("need to set a buffer and log message here for sanity", "start_time", cs.StartTime, "now", now)
 	}
