@@ -621,13 +621,11 @@ func (store dbStore) saveValidatorsInfo(height, lastHeightChanged int64, valSet 
 	}
 	// Only persist validator set if it was updated or checkpoint height (see
 	// valSetCheckpointInterval) is reached.
-	if height == lastHeightChanged || height%valSetCheckpointInterval == 0 {
-		pv, err := valSet.ToProto()
-		if err != nil {
-			return err
-		}
-		valInfo.ValidatorSet = pv
+	pv, err := valSet.ToProto()
+	if err != nil {
+		return err
 	}
+	valInfo.ValidatorSet = pv
 
 	bz, err := valInfo.Marshal()
 	if err != nil {
