@@ -15,7 +15,7 @@ import (
 func main() {
 	rootCmd := cmd.RootCmd
 	rootCmd.PersistentFlags().Int64Var(&types.PriorityResetHeightInterval, "reset-priority-height-interval", 100, "reset priority height interval")
-	rootCmd.PersistentFlags().Int32Var(&types.PriorityResetRound, "reset-priority-round", 20, "reset priority round")
+	rootCmd.PersistentFlags().Int32Var(&types.PriorityResetRoundInterval, "reset-priority-round-interval", 20, "reset priority round interval")
 	rootCmd.AddCommand(
 		cmd.GenValidatorCmd,
 		cmd.InitFilesCmd,
