@@ -280,11 +280,8 @@ func (blockExec *BlockExecutor) applyBlock(state State, blockID types.BlockID, b
 		blockExec.metrics.ConsensusParamUpdates.Add(1)
 	}
 
-	if block.Height == types.PriorityResetHeight+1 {
-		state.NextValidators.ResetPriorities()
-	}
-
-	if block.Height%types.PriorityResetHeightInterval == 0 {
+	if (block.Height == types.PriorityResetHeight+1) ||
+		(block.Height%types.PriorityResetHeightInterval == 0) {
 		state.NextValidators.ResetPriorities()
 	}
 
