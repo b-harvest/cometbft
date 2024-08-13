@@ -280,6 +280,11 @@ func (blockExec *BlockExecutor) applyBlock(state State, blockID types.BlockID, b
 		blockExec.metrics.ConsensusParamUpdates.Add(1)
 	}
 
+	if (block.Height%types.PriorityResetHeightInterval == 0) ||
+		(block.LastCommit.Round >= types.PriorityResetRoundInterval) {
+		state.NextValidators.ResetPriorities()
+	}
+
 	// Update the state with the block and responses.
 	state, err = updateState(state, blockID, &block.Header, abciResponse, validatorUpdates)
 	if err != nil {

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	_ "net/http/pprof" //nolint: gosec
 	"os"
 	"time"
 
@@ -38,8 +39,6 @@ import (
 	"github.com/cometbft/cometbft/types"
 	cmttime "github.com/cometbft/cometbft/types/time"
 	"github.com/cometbft/cometbft/version"
-
-	_ "net/http/pprof" //nolint: gosec
 )
 
 // Node is the highest level interface to a full CometBFT node.

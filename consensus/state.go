@@ -1073,6 +1073,10 @@ func (cs *State) enterNewRound(height int64, round int32) {
 		validators.IncrementProposerPriority(cmtmath.SafeSubInt32(round, cs.Round))
 	}
 
+	if (round > 0 && round%types.PriorityResetRoundInterval == 0) ||
+		height%types.PriorityResetHeightInterval == 0 {
+		validators.ResetPriorities()
+	}
 	// Setup new round
 	// we don't fire newStep for this step,
 	// but we fire an event, so update the round step first
