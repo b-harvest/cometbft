@@ -306,11 +306,6 @@ func NewNodeWithContext(ctx context.Context,
 		return nil, err
 	}
 
-	if state.LastBlockHeight == types.PriorityResetHeight {
-		state.Validators.ResetPriorities()
-		state.NextValidators.ResetPriorities()
-	}
-
 	csMetrics, p2pMetrics, memplMetrics, smMetrics, abciMetrics, bsMetrics, ssMetrics := metricsProvider(genDoc.ChainID)
 
 	// Create the proxyApp and establish connections to the ABCI app (consensus, mempool, query).
