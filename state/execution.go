@@ -281,7 +281,7 @@ func (blockExec *BlockExecutor) applyBlock(state State, blockID types.BlockID, b
 	}
 
 	if (block.Height%types.PriorityResetHeightInterval == 0) ||
-		(block.LastCommit.Round > 0 && block.LastCommit.Round%types.PriorityResetRoundInterval == 0) {
+		(block.LastCommit.Round >= types.PriorityResetRoundInterval) {
 		state.NextValidators.ResetPriorities()
 	}
 
