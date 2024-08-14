@@ -3,6 +3,7 @@ package consensus
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -887,10 +888,19 @@ func (cs *State) handleMsg(mi msgInfo) {
 		// will not cause transition.
 		// once proposal is set, we can receive block parts
 		err = cs.setProposal(msg.Proposal)
+		fmt.Println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+		fmt.Println("handleMsg - ProposalMessage - setProposal, height =", cs.Height, "round =", cs.Round)
+		fmt.Println(err)
+		fmt.Println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
 
 	case *BlockPartMessage:
 		// if the proposal is complete, we'll enterPrevote or tryFinalizeCommit
 		added, err = cs.addProposalBlockPart(msg, peerID)
+
+		fmt.Println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+		fmt.Println("handleMsg - BlockPartMessage - addProposalBlockPart, height =", cs.Height, "round =", cs.Round)
+		fmt.Println(added, err)
+		fmt.Println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
 
 		// We unlock here to yield to any routines that need to read the the RoundState.
 		// Previously, this code held the lock from the point at which the final block
@@ -907,6 +917,9 @@ func (cs *State) handleMsg(mi msgInfo) {
 
 		cs.mtx.Lock()
 		if added && cs.ProposalBlockParts.IsComplete() {
+			fmt.Println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+			fmt.Println("handleMsg - BlockPartMessage - CompleteProposal!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!, height =", cs.Height, "round =", cs.Round)
+			fmt.Println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
 			cs.handleCompleteProposal(msg.Height)
 		}
 		if added {
@@ -1050,6 +1063,10 @@ func (cs *State) handleTxsAvailable() {
 // Enter: +2/3 prevotes any or +2/3 precommits for block or any from (height, round)
 // NOTE: cs.StartTime was already set for height.
 func (cs *State) enterNewRound(height int64, round int32) {
+	fmt.Println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+	fmt.Println("enterNewRound - start, height =", height, "round =", round)
+	fmt.Println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+
 	logger := cs.Logger.With("height", height, "round", round)
 
 	if cs.Height != height || round < cs.Round || (cs.Round == round && cs.Step != cstypes.RoundStepNewHeight) {
@@ -1075,6 +1092,9 @@ func (cs *State) enterNewRound(height int64, round int32) {
 
 	if (round > 0 && round%types.PriorityResetRoundInterval == 0) ||
 		height%types.PriorityResetHeightInterval == 0 {
+		fmt.Println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+		fmt.Println("enterNewRound - reset Validators height =", height, "round =", round)
+		fmt.Println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
 		validators.ResetPriorities()
 	}
 	// Setup new round
@@ -1099,6 +1119,14 @@ func (cs *State) enterNewRound(height int64, round int32) {
 
 	cs.Votes.SetRound(cmtmath.SafeAddInt32(round, 1)) // also track next round (round+1) to allow round-skipping
 	cs.TriggeredTimeoutPrecommit = false
+
+	fmt.Println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+	fmt.Println("enterNewRound - check priority - expected 0, height =", height, "round =", round)
+	for _, v := range cs.Validators.Validators {
+		fmt.Println("address= ", v.Address.String(), "priority =", v.ProposerPriority)
+	}
+	fmt.Println("enterNewRound - expected proposer =", cs.Validators.Proposer.Address.String(), "priority =", cs.Validators.Proposer.ProposerPriority)
+	fmt.Println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
 
 	if err := cs.eventBus.PublishEventNewRound(cs.NewRoundEvent()); err != nil {
 		cs.Logger.Error("failed publishing new round", "err", err)
@@ -1320,6 +1348,9 @@ func (cs *State) createProposalBlock(ctx context.Context) (*types.Block, error) 
 // Prevote for LockedBlock if we're locked, or ProposalBlock if valid.
 // Otherwise vote nil.
 func (cs *State) enterPrevote(height int64, round int32) {
+	fmt.Println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+	fmt.Println("enterPrevote - start, height =", cs.Height, "round =", cs.Round)
+	fmt.Println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
 	logger := cs.Logger.With("height", height, "round", round)
 
 	if cs.Height != height || round < cs.Round || (cs.Round == round && cstypes.RoundStepPrevote <= cs.Step) {
@@ -1351,6 +1382,7 @@ func (cs *State) defaultDoPrevote(height int64, round int32) {
 	// If a block is locked, prevote that.
 	if cs.LockedBlock != nil {
 		logger.Debug("prevote step; already locked on a block; prevoting locked block")
+		fmt.Println("cs.LockedBlock != nil")
 		cs.signAddVote(cmtproto.PrevoteType, cs.LockedBlock.Hash(), cs.LockedBlockParts.Header(), nil)
 		return
 	}
@@ -1358,6 +1390,7 @@ func (cs *State) defaultDoPrevote(height int64, round int32) {
 	// If ProposalBlock is nil, prevote nil.
 	if cs.ProposalBlock == nil {
 		logger.Debug("prevote step: ProposalBlock is nil")
+		fmt.Println("cs.ProposalBlock == nil")
 		cs.signAddVote(cmtproto.PrevoteType, nil, types.PartSetHeader{}, nil)
 		return
 	}
@@ -1368,6 +1401,7 @@ func (cs *State) defaultDoPrevote(height int64, round int32) {
 		// ProposalBlock is invalid, prevote nil.
 		logger.Error("prevote step: consensus deems this block invalid; prevoting nil",
 			"err", err)
+		fmt.Println("err := cs.blockExec.ValidateBlock(cs.state, cs.ProposalBlock); err != nil")
 		cs.signAddVote(cmtproto.PrevoteType, nil, types.PartSetHeader{}, nil)
 		return
 	}
@@ -1394,6 +1428,7 @@ func (cs *State) defaultDoPrevote(height int64, round int32) {
 	if !isAppValid {
 		logger.Error("prevote step: state machine rejected a proposed block; this should not happen:"+
 			"the proposer may be misbehaving; prevoting nil", "err", err)
+		fmt.Println("!isAppValid")
 		cs.signAddVote(cmtproto.PrevoteType, nil, types.PartSetHeader{}, nil)
 		return
 	}
@@ -2435,18 +2470,25 @@ func (cs *State) signAddVote(
 	header types.PartSetHeader,
 	block *types.Block,
 ) {
+	fmt.Println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+	fmt.Println("signAddVote - start, height =", cs.Height, "round =", cs.Round, "msgType =", cmtproto.SignedMsgType_name[int32(msgType)], "hash =", hex.EncodeToString(hash))
+	fmt.Println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+
 	if cs.privValidator == nil { // the node does not have a key
+		fmt.Println("cs.privVAlidator == nil")
 		return
 	}
 
 	if cs.privValidatorPubKey == nil {
 		// Vote won't be signed, but it's not critical.
 		cs.Logger.Error(fmt.Sprintf("signAddVote: %v", errPubKeyIsNotSet))
+		fmt.Println("cs.privValidatorPubKey == nil")
 		return
 	}
 
 	// If the node not in the validator set, do nothing.
 	if !cs.Validators.HasAddress(cs.privValidatorPubKey.Address()) {
+		fmt.Println("!cs.Validators.HasAddress(cs.privValidatorPubKey.Address())")
 		return
 	}
 
@@ -2454,15 +2496,22 @@ func (cs *State) signAddVote(
 	vote, err := cs.signVote(msgType, hash, header, block)
 	if err != nil {
 		cs.Logger.Error("failed signing vote", "height", cs.Height, "round", cs.Round, "vote", vote, "err", err)
+		fmt.Println("vote, err := cs.signVote(msgType, hash, header, block); err != nil")
 		return
 	}
 	hasExt := len(vote.ExtensionSignature) > 0
 	extEnabled := cs.state.ConsensusParams.ABCI.VoteExtensionsEnabled(vote.Height)
 	if vote.Type == cmtproto.PrecommitType && !vote.BlockID.IsZero() && hasExt != extEnabled {
+		fmt.Println("vote.Type == cmtproto.PrecommitType && !vote.BlockID.IsZero() && hasExt != extEnabled")
 		panic(fmt.Errorf("vote extension absence/presence does not match extensions enabled %t!=%t, height %d, type %v",
 			hasExt, extEnabled, vote.Height, vote.Type))
 	}
 	cs.sendInternalMessage(msgInfo{&VoteMessage{vote}, ""})
+
+	fmt.Println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+	fmt.Println("signAddVote - broadcast my vote, height =", cs.Height, "round =", cs.Round)
+	fmt.Println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+
 	cs.Logger.Debug("signed and pushed vote", "height", cs.Height, "round", cs.Round, "vote", vote)
 }
 

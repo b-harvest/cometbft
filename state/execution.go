@@ -190,6 +190,10 @@ func (blockExec *BlockExecutor) ProcessProposal(
 func (blockExec *BlockExecutor) ValidateBlock(state State, block *types.Block) error {
 	err := validateBlock(state, block)
 	if err != nil {
+		fmt.Println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+		fmt.Println("ValidateBlock, height =", block.Height)
+		fmt.Println(err)
+		fmt.Println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
 		return err
 	}
 	return blockExec.evpool.CheckEvidence(block.Evidence.Evidence)
@@ -213,6 +217,10 @@ func (blockExec *BlockExecutor) ApplyBlock(
 ) (State, error) {
 
 	if err := validateBlock(state, block); err != nil {
+		fmt.Println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+		fmt.Println("ApplyBlock - validateBlock, height =", block.Height)
+		fmt.Println(err)
+		fmt.Println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
 		return state, ErrInvalidBlock(err)
 	}
 
@@ -220,6 +228,9 @@ func (blockExec *BlockExecutor) ApplyBlock(
 }
 
 func (blockExec *BlockExecutor) applyBlock(state State, blockID types.BlockID, block *types.Block) (State, error) {
+	fmt.Println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+	fmt.Println("applyBlock - start, height =", block.Height)
+	fmt.Println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
 	startTime := time.Now().UnixNano()
 	abciResponse, err := blockExec.proxyApp.FinalizeBlock(context.TODO(), &abci.RequestFinalizeBlock{
 		Hash:               block.Hash(),
@@ -282,6 +293,9 @@ func (blockExec *BlockExecutor) applyBlock(state State, blockID types.BlockID, b
 
 	if (block.Height%types.PriorityResetHeightInterval == 0) ||
 		(block.LastCommit.Round >= types.PriorityResetRoundInterval) {
+		fmt.Println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+		fmt.Println("applyBlock - reset state.NextValidators LastCommit.Round =", block.LastCommit.Round, "height =", block.Height)
+		fmt.Println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
 		state.NextValidators.ResetPriorities()
 	}
 
@@ -290,6 +304,13 @@ func (blockExec *BlockExecutor) applyBlock(state State, blockID types.BlockID, b
 	if err != nil {
 		return state, fmt.Errorf("commit failed for application: %v", err)
 	}
+
+	fmt.Println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+	fmt.Println("applyBlock - check priority, height =", block.Height)
+	for _, v := range state.Validators.Validators {
+		fmt.Println("address =", v.Address.String(), "priority =", v.ProposerPriority)
+	}
+	fmt.Println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
 
 	// Lock mempool, commit app state, update mempoool.
 	retainHeight, err := blockExec.Commit(state, block, abciResponse)
