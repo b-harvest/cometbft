@@ -1,5 +1,57 @@
 # CHANGELOG
 
+## v0.38.11
+
+*August 12, 2024*
+
+This release fixes a panic in consensus where CometBFT would previously panic
+if there's no extension signature in non-nil Precommit EVEN IF vote extensions
+themselves are disabled.
+
+It also includes a few other bug fixes and performance improvements.
+
+### BUG FIXES
+
+- `[types]` Added missing JSON tags to `DuplicateVoteEvidence` and `LightClientAttackEvidence`
+  types ([\#3528](https://github.com/cometbft/cometbft/issues/3528))
+- `[types]` Only check IFF vote is a non-nil Precommit if extensionsEnabled
+  types ([\#3565](https://github.com/cometbft/cometbft/issues/3565))
+
+### IMPROVEMENTS
+
+- `[indexer]` Fixed ineffective select break statements; they now
+  point to their enclosing for loop label to exit
+  ([\#3544](https://github.com/cometbft/cometbft/issues/3544))
+
+## v0.38.10
+
+*July 16, 2024*
+
+This release fixes a bug in `v0.38.x` that prevented ABCI responses from being
+correctly read when upgrading from `v0.37.x` or below. It also includes a few other
+bug fixes and performance improvements.
+
+### BUG FIXES
+
+- `[p2p]` Node respects configured `max_num_outbound_peers` limit when dialing
+  peers provided by a seed node
+  ([\#486](https://github.com/cometbft/cometbft/issues/486))
+- `[rpc]` Fix an issue where a legacy ABCI response, created on `v0.37` or before, is not returned properly in `v0.38` and up
+  on the `/block_results` RPC endpoint.
+  ([\#3002](https://github.com/cometbft/cometbft/issues/3002))
+- `[blocksync]` Do not stay in blocksync if the node's validator voting power
+  is high enough to block the chain while it is not online
+  ([\#3406](https://github.com/cometbft/cometbft/pull/3406))
+
+### IMPROVEMENTS
+
+- `[p2p/conn]` Update send monitor, used for sending rate limiting, once per batch of packets sent
+  ([\#3382](https://github.com/cometbft/cometbft/pull/3382))
+- `[libs/pubsub]` Allow dash (`-`) in event tags
+  ([\#3401](https://github.com/cometbft/cometbft/issues/3401))
+- `[p2p/conn]` Remove the usage of a synchronous pool of buffers in secret connection, storing instead the buffer in the connection struct. This reduces the synchronization primitive usage, speeding up the code.
+  ([\#3403](https://github.com/cometbft/cometbft/issues/3403))
+
 ## v0.38.9
 
 *July 1, 2024*
@@ -35,6 +87,10 @@ This release contains a few bug fixes and performance improvements.
 
 ### BUG FIXES
 
+- `[blockstore]` Added peer banning in blockstore
+  ([\#ABC-0013](https://github.com/cometbft/cometbft/security/advisories/GHSA-hg58-rf2h-6rr7))
+- `[blockstore]` Send correct error message when vote extensions do not align with received packet
+  ([\#ABC-0014](https://github.com/cometbft/cometbft/security/advisories/GHSA-hg58-rf2h-6rr7))
 - [`mempool`] Fix data race when rechecking with async ABCI client
   ([\#1827](https://github.com/cometbft/cometbft/issues/1827))
 - `[consensus]` Fix a race condition in the consensus timeout ticker. Race is caused by two timeouts being scheduled at the same time.
@@ -44,10 +100,6 @@ This release contains a few bug fixes and performance improvements.
 
 ### IMPROVEMENTS
 
-- `[blockstore]` Added peer banning in blockstore
-  ([\#ABC-0013](https://github.com/cometbft/cometbft/security/advisories/GHSA-hg58-rf2h-6rr7))
-- `[blockstore]` Send correct error message when vote extensions do not align with received packet
-  ([\#ABC-0014](https://github.com/cometbft/cometbft/security/advisories/GHSA-hg58-rf2h-6rr7))
 - `[config]` Added `recheck_timeout` mempool parameter to set how much time to wait for recheck
   responses from the app (only applies to non-local ABCI clients).
   ([\#1827](https://github.com/cometbft/cometbft/issues/1827/))
