@@ -389,7 +389,14 @@ func (blockExec *BlockExecutor) Commit(
 	block *types.Block,
 	abciResponse *abci.ResponseFinalizeBlock,
 ) (int64, error) {
+	fName, tFormat := "BlockExecutor.Commit", "15:04:05.000"
+	blockExec.logger.Info(
+		fmt.Sprintf("[%s]%s:: call mempool.Lock", time.Now().Format(tFormat), fName),
+	)
 	blockExec.mempool.Lock()
+	blockExec.logger.Info(
+		fmt.Sprintf("[%s]%s:: done mempool.Lock", time.Now().Format(tFormat), fName),
+	)
 	defer blockExec.mempool.Unlock()
 
 	// while mempool is Locked, flush to ensure all async requests have completed
