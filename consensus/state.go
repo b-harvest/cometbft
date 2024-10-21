@@ -556,6 +556,13 @@ func (cs *State) updateRoundStep(round int32, step cstypes.RoundStepType) {
 func (cs *State) scheduleRound0(rs *cstypes.RoundState) {
 	// cs.Logger.Info("scheduleRound0", "now", cmttime.Now(), "startTime", cs.StartTime)
 	sleepDuration := rs.StartTime.Sub(cmttime.Now())
+	tFormat := "15:04:05.000"
+	cs.Logger.Info(
+		fmt.Sprintf("[%s]scheduleRound0", time.Now().Format(tFormat)),
+		"canonicalNow", cmttime.Now().Format(tFormat),
+		"state.startTime", cs.StartTime.Format(tFormat),
+		"sleepDuration", sleepDuration,
+	)
 	cs.scheduleTimeout(sleepDuration, rs.Height, 0, cstypes.RoundStepNewHeight)
 }
 
@@ -1317,7 +1324,6 @@ func (cs *State) createProposalBlock(ctx context.Context) (*types.Block, error) 
 // Otherwise vote nil.
 func (cs *State) enterPrevote(height int64, round int32) {
 	logger := cs.Logger.With("height", height, "round", round)
-
 	if cs.Height != height || round < cs.Round || (cs.Round == round && cstypes.RoundStepPrevote <= cs.Step) {
 		logger.Debug(
 			"entering prevote step with invalid args",
@@ -1333,6 +1339,7 @@ func (cs *State) enterPrevote(height int64, round int32) {
 	}()
 
 	logger.Debug("entering prevote step", "current", log.NewLazySprintf("%v/%v/%v", cs.Height, cs.Round, cs.Step))
+	logger.Info(fmt.Sprintf("[%s]entering prevote step", time.Now().Format("15:04:05.000")), "current", log.NewLazySprintf("%v/%v/%v", cs.Height, cs.Round, cs.Step))
 
 	// Sign and broadcast vote as necessary
 	cs.doPrevote(height, round)
@@ -1421,6 +1428,7 @@ func (cs *State) enterPrevoteWait(height int64, round int32) {
 	}
 
 	logger.Debug("entering prevote wait step", "current", log.NewLazySprintf("%v/%v/%v", cs.Height, cs.Round, cs.Step))
+	logger.Info(fmt.Sprintf("[%s]entering prevote wait step", time.Now().Format("15:04:05.000")), "current", log.NewLazySprintf("%v/%v/%v", cs.Height, cs.Round, cs.Step))
 
 	defer func() {
 		// Done enterPrevoteWait:
@@ -1580,6 +1588,7 @@ func (cs *State) enterPrecommitWait(height int64, round int32) {
 	}
 
 	logger.Debug("entering precommit wait step", "current", log.NewLazySprintf("%v/%v/%v", cs.Height, cs.Round, cs.Step))
+	logger.Info(fmt.Sprintf("[%s]entering precommit wait step", time.Now().Format("15:04:05.000")), "current", log.NewLazySprintf("%v/%v/%v", cs.Height, cs.Round, cs.Step))
 
 	defer func() {
 		// Done enterPrecommitWait:
@@ -1604,6 +1613,7 @@ func (cs *State) enterCommit(height int64, commitRound int32) {
 	}
 
 	logger.Debug("entering commit step", "current", log.NewLazySprintf("%v/%v/%v", cs.Height, cs.Round, cs.Step))
+	logger.Info(fmt.Sprintf("[%s]entering commit step", time.Now().Format("15:04:05.000")), "current", log.NewLazySprintf("%v/%v/%v", cs.Height, cs.Round, cs.Step))
 
 	defer func() {
 		// Done enterCommit:
@@ -1783,6 +1793,7 @@ func (cs *State) finalizeCommit(height int64) {
 
 	fail.Fail() // XXX
 
+	logger.Info(fmt.Sprintf("[%s]done apply block", time.Now().Format("15:04:05.000")), "height", block.Height, "app_hash", block.AppHash)
 	// must be called before we update state
 	cs.recordMetrics(height, block)
 
@@ -1942,7 +1953,7 @@ func (cs *State) defaultSetProposal(proposal *types.Proposal) error {
 		cs.ProposalBlockParts = types.NewPartSetFromHeader(proposal.BlockID.PartSetHeader)
 	}
 
-	cs.Logger.Info("received proposal", "proposal", proposal, "proposer", pubKey.Address())
+	cs.Logger.Info(fmt.Sprintf("[%s]received proposal", time.Now().Format("15:04:05.000")), "proposal", proposal, "proposer", pubKey.Address())
 	return nil
 }
 
@@ -2018,7 +2029,13 @@ func (cs *State) addProposalBlockPart(msg *BlockPartMessage, peerID p2p.ID) (add
 		cs.ProposalBlock = block
 
 		// NOTE: it's possible to receive complete proposal blocks for future rounds without having the proposal
-		cs.Logger.Info("received complete proposal block", "height", cs.ProposalBlock.Height, "hash", cs.ProposalBlock.Hash())
+		//cs.Logger.Info("received complete proposal block", "height", cs.ProposalBlock.Height, "hash", cs.ProposalBlock.Hash())
+		cs.Logger.Info(
+			fmt.Sprintf("[%s]received complete proposal block", time.Now().Format("15:04:05.000")),
+			"height", cs.ProposalBlock.Height,
+			"hash", cs.ProposalBlock.Hash(),
+			"blockTime", cs.ProposalBlock.Time,
+		)
 
 		if err := cs.eventBus.PublishEventCompleteProposal(cs.CompleteProposalEvent()); err != nil {
 			cs.Logger.Error("failed publishing event complete proposal", "err", err)

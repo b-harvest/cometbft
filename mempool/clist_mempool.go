@@ -622,7 +622,10 @@ func (mem *CListMempool) Update(
 
 	// Recheck txs left in the mempool to remove them if they became invalid in the new state.
 	if mem.config.Recheck {
+		fName, tFormat := "Mempool.Update", "15:04:05.000"
+		mem.logger.Info(fmt.Sprintf("[%s]%s::start recheck txs", time.Now().Format(tFormat), fName), "numtxs", mem.Size(), "height", height)
 		mem.recheckTxs()
+		mem.logger.Info(fmt.Sprintf("[%s]%s::done recheck txs", time.Now().Format(tFormat), fName))
 	}
 
 	// Notify if there are still txs left in the mempool.
