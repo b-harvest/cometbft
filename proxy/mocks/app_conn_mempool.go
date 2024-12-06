@@ -17,6 +17,66 @@ type AppConnMempool struct {
 	mock.Mock
 }
 
+// BeginRecheckTx provides a mock function with given fields: _a0, _a1
+func (_m *AppConnMempool) BeginRecheckTx(_a0 context.Context, _a1 *types.RequestBeginRecheckTx) (*types.ResponseBeginRecheckTx, error) {
+	ret := _m.Called(_a0, _a1)
+
+	if len(ret) == 0 {
+		panic("no return value specified for BeginRecheckTx")
+	}
+
+	var r0 *types.ResponseBeginRecheckTx
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, *types.RequestBeginRecheckTx) (*types.ResponseBeginRecheckTx, error)); ok {
+		return rf(_a0, _a1)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, *types.RequestBeginRecheckTx) *types.ResponseBeginRecheckTx); ok {
+		r0 = rf(_a0, _a1)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*types.ResponseBeginRecheckTx)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, *types.RequestBeginRecheckTx) error); ok {
+		r1 = rf(_a0, _a1)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// BeginRecheckTxAsync provides a mock function with given fields: _a0, _a1
+func (_m *AppConnMempool) BeginRecheckTxAsync(_a0 context.Context, _a1 *types.RequestBeginRecheckTx) (*abcicli.ReqRes, error) {
+	ret := _m.Called(_a0, _a1)
+
+	if len(ret) == 0 {
+		panic("no return value specified for BeginRecheckTxAsync")
+	}
+
+	var r0 *abcicli.ReqRes
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, *types.RequestBeginRecheckTx) (*abcicli.ReqRes, error)); ok {
+		return rf(_a0, _a1)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, *types.RequestBeginRecheckTx) *abcicli.ReqRes); ok {
+		r0 = rf(_a0, _a1)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*abcicli.ReqRes)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, *types.RequestBeginRecheckTx) error); ok {
+		r1 = rf(_a0, _a1)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 // CheckTx provides a mock function with given fields: _a0, _a1
 func (_m *AppConnMempool) CheckTx(_a0 context.Context, _a1 *types.RequestCheckTx) (*types.ResponseCheckTx, error) {
 	ret := _m.Called(_a0, _a1)
@@ -77,7 +137,67 @@ func (_m *AppConnMempool) CheckTxAsync(_a0 context.Context, _a1 *types.RequestCh
 	return r0, r1
 }
 
-// Error provides a mock function with given fields:
+// EndRecheckTx provides a mock function with given fields: _a0, _a1
+func (_m *AppConnMempool) EndRecheckTx(_a0 context.Context, _a1 *types.RequestEndRecheckTx) (*types.ResponseEndRecheckTx, error) {
+	ret := _m.Called(_a0, _a1)
+
+	if len(ret) == 0 {
+		panic("no return value specified for EndRecheckTx")
+	}
+
+	var r0 *types.ResponseEndRecheckTx
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, *types.RequestEndRecheckTx) (*types.ResponseEndRecheckTx, error)); ok {
+		return rf(_a0, _a1)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, *types.RequestEndRecheckTx) *types.ResponseEndRecheckTx); ok {
+		r0 = rf(_a0, _a1)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*types.ResponseEndRecheckTx)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, *types.RequestEndRecheckTx) error); ok {
+		r1 = rf(_a0, _a1)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// EndRecheckTxAsync provides a mock function with given fields: _a0, _a1
+func (_m *AppConnMempool) EndRecheckTxAsync(_a0 context.Context, _a1 *types.RequestEndRecheckTx) (*abcicli.ReqRes, error) {
+	ret := _m.Called(_a0, _a1)
+
+	if len(ret) == 0 {
+		panic("no return value specified for EndRecheckTxAsync")
+	}
+
+	var r0 *abcicli.ReqRes
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, *types.RequestEndRecheckTx) (*abcicli.ReqRes, error)); ok {
+		return rf(_a0, _a1)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, *types.RequestEndRecheckTx) *abcicli.ReqRes); ok {
+		r0 = rf(_a0, _a1)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*abcicli.ReqRes)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, *types.RequestEndRecheckTx) error); ok {
+		r1 = rf(_a0, _a1)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// Error provides a mock function with no fields
 func (_m *AppConnMempool) Error() error {
 	ret := _m.Called()
 

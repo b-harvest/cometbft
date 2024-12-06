@@ -66,8 +66,7 @@ type Mempool interface {
 	// 1. This should be called *after* block is committed by consensus.
 	// 2. Lock/Unlock must be managed by the caller.
 	Update(
-		blockHeight int64,
-		blockTxs types.Txs,
+		block *types.Block,
 		deliverTxResponses []*abci.ExecTxResult,
 		newPreFn PreCheckFunc,
 		newPostFn PostCheckFunc,

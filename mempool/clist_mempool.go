@@ -3,6 +3,7 @@ package mempool
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -580,12 +581,14 @@ func (mem *CListMempool) ReapMaxTxs(max int) types.Txs {
 
 // Lock() must be help by the caller during execution.
 func (mem *CListMempool) Update(
-	height int64,
-	txs types.Txs,
+	block *types.Block,
 	txResults []*abci.ExecTxResult,
 	preCheck PreCheckFunc,
 	postCheck PostCheckFunc,
 ) error {
+	height := block.Height
+	txs := block.Data.Txs
+
 	mem.logger.Debug("Update", "height", height, "len(txs)", len(txs))
 
 	// Set height
@@ -627,7 +630,27 @@ func (mem *CListMempool) Update(
 
 	// Recheck txs left in the mempool to remove them if they became invalid in the new state.
 	if mem.config.Recheck {
-		mem.recheckTxs()
+		mem.logger.Debug("recheck txs", "numtxs", mem.Size(), "height", height)
+		res, err := mem.proxyAppConn.BeginRecheckTx(context.TODO(), &abci.RequestBeginRecheckTx{
+			Header: types.TM2PB.Header(&block.Header),
+		})
+		if res.Code == abci.CodeTypeOK && err == nil {
+			mem.recheckTxs()
+			res2, err2 := mem.proxyAppConn.EndRecheckTx(context.TODO(), &abci.RequestEndRecheckTx{Height: height})
+			if res2.Code != abci.CodeTypeOK {
+				return errors.New("the function EndRecheckTxSync does not respond CodeTypeOK")
+			}
+			if err2 != nil {
+				return errors.Join(err2, errors.New("the function EndRecheckTxSync returns an error"))
+			}
+		} else {
+			if res.Code != abci.CodeTypeOK {
+				return errors.New("the function BeginRecheckTxSync does not respond CodeTypeOK")
+			}
+			if err != nil {
+				return errors.Join(err, errors.New("the function BeginRecheckTxSync returns an error"))
+			}
+		}
 	}
 
 	// Notify if there are still txs left in the mempool.

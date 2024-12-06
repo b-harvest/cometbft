@@ -159,6 +159,16 @@ func TestMempoolRmBadTx(t *testing.T) {
 	_, err = app.Commit(context.Background(), &abci.RequestCommit{})
 	require.NoError(t, err)
 
+	resBeginRecheckTx, err := app.BeginRecheckTx(context.Background(), &abci.RequestBeginRecheckTx{})
+	require.NoError(t, err)
+	assert.Equal(t, abci.CodeTypeOK, resBeginRecheckTx.Code)
+
+	// There is no tx to recheck
+
+	resEndRecheckTx, err := app.EndRecheckTx(context.Background(), &abci.RequestEndRecheckTx{})
+	require.NoError(t, err)
+	assert.Equal(t, abci.CodeTypeOK, resEndRecheckTx.Code)
+
 	emptyMempoolCh := make(chan struct{})
 	checkTxRespCh := make(chan struct{})
 	go func() {

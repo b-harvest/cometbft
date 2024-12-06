@@ -30,7 +30,7 @@ func TestNopMempool_Basic(t *testing.T) {
 	err = mem.FlushAppConn()
 	assert.NoError(t, err)
 
-	err = mem.Update(0, nil, nil, nil, nil)
+	err = mem.Update(newTestBlock(0, nil), nil, nil, nil)
 	assert.NoError(t, err)
 
 	txsAvailable := mem.TxsAvailable()

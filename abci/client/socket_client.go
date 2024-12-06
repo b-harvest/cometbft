@@ -412,6 +412,36 @@ func (cli *socketClient) FinalizeBlock(ctx context.Context, req *types.RequestFi
 	return reqRes.Response.GetFinalizeBlock(), cli.Error()
 }
 
+func (cli *socketClient) BeginRecheckTx(ctx context.Context, req *types.RequestBeginRecheckTx) (*types.ResponseBeginRecheckTx, error) {
+	reqRes, err := cli.queueRequest(ctx, types.ToRequestBeginRecheckTx(req))
+	if err != nil {
+		return nil, err
+	}
+	if err := cli.Flush(ctx); err != nil {
+		return nil, err
+	}
+	return reqRes.Response.GetBeginRecheckTx(), cli.Error()
+}
+
+func (cli *socketClient) EndRecheckTx(ctx context.Context, req *types.RequestEndRecheckTx) (*types.ResponseEndRecheckTx, error) {
+	reqRes, err := cli.queueRequest(ctx, types.ToRequestEndRecheckTx(req))
+	if err != nil {
+		return nil, err
+	}
+	if err := cli.Flush(ctx); err != nil {
+		return nil, err
+	}
+	return reqRes.Response.GetEndRecheckTx(), cli.Error()
+}
+
+func (cli *socketClient) BeginRecheckTxAsync(ctx context.Context, req *types.RequestBeginRecheckTx) (*ReqRes, error) {
+	return cli.queueRequest(ctx, types.ToRequestBeginRecheckTx(req))
+}
+
+func (cli *socketClient) EndRecheckTxAsync(ctx context.Context, req *types.RequestEndRecheckTx) (*ReqRes, error) {
+	return cli.queueRequest(ctx, types.ToRequestEndRecheckTx(req))
+}
+
 func (cli *socketClient) queueRequest(ctx context.Context, req *types.Request) (*ReqRes, error) {
 	reqres := NewReqRes(req)
 

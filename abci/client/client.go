@@ -39,6 +39,8 @@ type Client interface {
 	// mempool to remove this vestige behavior.
 	SetResponseCallback(Callback)
 	CheckTxAsync(context.Context, *types.RequestCheckTx) (*ReqRes, error)
+	BeginRecheckTxAsync(context.Context, *types.RequestBeginRecheckTx) (*ReqRes, error)
+	EndRecheckTxAsync(context.Context, *types.RequestEndRecheckTx) (*ReqRes, error)
 }
 
 //----------------------------------------

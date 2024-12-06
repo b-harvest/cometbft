@@ -42,8 +42,7 @@ func (*NopMempool) Unlock() {}
 
 // Update does nothing.
 func (*NopMempool) Update(
-	int64,
-	types.Txs,
+	*types.Block,
 	[]*abci.ExecTxResult,
 	PreCheckFunc,
 	PostCheckFunc,
