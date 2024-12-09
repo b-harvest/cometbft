@@ -16,22 +16,9 @@ type Mempool struct {
 	mock.Mock
 }
 
-// CheckTxAsync provides a mock function with given fields: tx, txInfo, callback
-func (_m *Mempool) CheckTxAsync(tx types.Tx, txInfo mempool.TxInfo, callback func(*abcitypes.Response)) error {
-	ret := _m.Called(tx, txInfo, callback)
-
-	if len(ret) == 0 {
-		panic("no return value specified for CheckTxAsync")
-	}
-
-	var r0 error
-	if rf, ok := ret.Get(0).(func(types.Tx, mempool.TxInfo, func(*abcitypes.Response)) error); ok {
-		r0 = rf(tx, txInfo, callback)
-	} else {
-		r0 = ret.Error(0)
-	}
-
-	return r0
+// CheckTxAsync provides a mock function with given fields: tx, txInfo, prepareCb, checkTxCb
+func (_m *Mempool) CheckTxAsync(tx types.Tx, txInfo mempool.TxInfo, prepareCb func(error), checkTxCb func(*abcitypes.Response)) {
+	_m.Called(tx, txInfo, prepareCb, checkTxCb)
 }
 
 // CheckTxSync provides a mock function with given fields: tx, txInfo

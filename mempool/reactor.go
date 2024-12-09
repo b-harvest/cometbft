@@ -154,18 +154,19 @@ func (memR *Reactor) Receive(e p2p.Envelope) {
 		var err error
 		for _, tx := range protoTxs {
 			ntx := types.Tx(tx)
-			err = memR.mempool.CheckTxAsync(ntx, txInfo, nil)
-			if err != nil {
-				switch {
-				case errors.Is(err, ErrTxInCache):
-					memR.Logger.Debug("Tx already exists in cache", "tx", ntx.String())
-				case errors.As(err, &ErrMempoolIsFull{}):
-					// using debug level to avoid flooding when traffic is high
-					memR.Logger.Debug(err.Error())
-				default:
-					memR.Logger.Info("Could not check tx", "tx", ntx.String(), "err", err)
+			memR.mempool.CheckTxAsync(ntx, txInfo, func(error) {
+				if err != nil {
+					switch {
+					case errors.Is(err, ErrTxInCache):
+						memR.Logger.Debug("Tx already exists in cache", "tx", ntx.String())
+					case errors.As(err, &ErrMempoolIsFull{}):
+						// using debug level to avoid flooding when traffic is high
+						memR.Logger.Debug(err.Error())
+					default:
+						memR.Logger.Info("Could not check tx", "tx", ntx.String(), "err", err)
+					}
 				}
-			}
+			}, nil)
 		}
 	default:
 		memR.Logger.Error("unknown message type", "src", e.Src, "chId", e.ChannelID, "msg", e.Message)

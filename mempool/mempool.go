@@ -32,7 +32,7 @@ type Mempool interface {
 	// CheckTx executes a new transaction against the application to determine
 	// its validity and whether it should be added to the mempool.
 	CheckTxSync(tx types.Tx, txInfo TxInfo) (*abci.Response, error)
-	CheckTxAsync(tx types.Tx, txInfo TxInfo, callback func(*abci.Response)) error
+	CheckTxAsync(tx types.Tx, txInfo TxInfo, prepareCb func(error), checkTxCb func(*abci.Response))
 
 	// RemoveTxByKey removes a transaction, identified by its key,
 	// from the mempool.

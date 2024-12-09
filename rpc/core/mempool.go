@@ -20,7 +20,11 @@ import (
 // CheckTx nor transaction results.
 // More: https://docs.cometbft.com/v0.38.x/rpc/#/Tx/broadcast_tx_async
 func (env *Environment) BroadcastTxAsync(_ *rpctypes.Context, tx types.Tx) (*ctypes.ResultBroadcastTx, error) {
-	err := env.Mempool.CheckTxAsync(tx, mempl.TxInfo{}, nil)
+	chErr := make(chan error)
+	env.Mempool.CheckTxAsync(tx, mempl.TxInfo{}, func(err error) {
+		chErr <- err
+	}, nil)
+	err := <-chErr
 	if err != nil {
 		return nil, err
 	}

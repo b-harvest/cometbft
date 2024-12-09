@@ -38,6 +38,8 @@ type CListMempool struct {
 	preCheck  PreCheckFunc
 	postCheck PostCheckFunc
 
+	chReqCheckTx chan *requestCheckTxAsync
+
 	txs          *clist.CList // concurrent linked-list of good txs
 	proxyAppConn proxy.AppConnMempool
 
@@ -51,6 +53,13 @@ type CListMempool struct {
 
 	logger  log.Logger
 	metrics *Metrics
+}
+
+type requestCheckTxAsync struct {
+	tx        types.Tx
+	txInfo    TxInfo
+	prepareCb func(error)
+	checkTxCb func(*abci.Response)
 }
 
 var _ Mempool = &CListMempool{}
@@ -70,6 +79,7 @@ func NewCListMempool(
 		config:       cfg,
 		proxyAppConn: proxyAppConn,
 		txs:          clist.New(),
+		chReqCheckTx: make(chan *requestCheckTxAsync, cfg.Size),
 		logger:       log.NewNopLogger(),
 		metrics:      NopMetrics(),
 	}
@@ -86,7 +96,7 @@ func NewCListMempool(
 	for _, option := range options {
 		option(mp)
 	}
-
+	go mp.checkTxAsyncReactor()
 	return mp
 }
 
@@ -225,44 +235,50 @@ func (mem *CListMempool) CheckTxSync(tx types.Tx, txInfo TxInfo) (res *abci.Resp
 	return res, err
 }
 
-// It blocks if we're waiting on Update() or Reap().
 // cb: A callback from the CheckTx command.
 //
 //	It gets called from another goroutine.
 //
-// CONTRACT: Either cb will get called, or err returned.
-//
 // Safe for concurrent use by multiple goroutines.
-func (mem *CListMempool) CheckTxAsync(
-	tx types.Tx,
-	txInfo TxInfo,
-	cb func(*abci.Response),
-) error {
-	var err error
+func (mem *CListMempool) CheckTxAsync(tx types.Tx, txInfo TxInfo, prepareCb func(error), checkTxCb func(*abci.Response)) {
+	mem.chReqCheckTx <- &requestCheckTxAsync{tx: tx, txInfo: txInfo, prepareCb: prepareCb, checkTxCb: checkTxCb}
+}
 
+func (mem *CListMempool) checkTxAsyncReactor() {
+	for req := range mem.chReqCheckTx {
+		mem.checkTxAsync(req.tx, req.txInfo, req.prepareCb, req.checkTxCb)
+	}
+}
+
+// It blocks if we're waiting on Update() or Reap().
+func (mem *CListMempool) checkTxAsync(tx types.Tx, txInfo TxInfo, prepareCb func(error), checkTxCb func(*abci.Response)) {
 	mem.updateMtx.RLock()
-	// use defer to unlock mutex because application (*local client*) might panic
 	defer func() {
-		if err != nil {
-			mem.updateMtx.RUnlock()
-			return
-		}
-
 		if r := recover(); r != nil {
 			mem.updateMtx.RUnlock()
 			panic(r)
 		}
 	}()
-	if err = mem.prepareCheckTx(tx, txInfo); err != nil {
-		return err
+
+	err := mem.prepareCheckTx(tx, txInfo)
+	if prepareCb != nil {
+		prepareCb(err)
 	}
-	// CONTRACT: `app.CheckTxAsync()` should check whether `GasWanted` is valid (0 <= GasWanted <= block.masGas)
-	reqRes, err := mem.proxyAppConn.CheckTxAsync(context.TODO(), &abci.RequestCheckTx{Tx: tx})
-	reqRes.SetCallback(func(res *abci.Response) {
-		mem.reqResCb(tx, txInfo, res, cb)
+	if err != nil {
 		mem.updateMtx.RUnlock()
+		return
+	}
+
+	// CONTRACT: `app.CheckTxAsync()` should check whether `GasWanted` is valid (0 <= GasWanted <= block.masGas)
+	reqRes, _ := mem.proxyAppConn.CheckTxAsync(context.TODO(), &abci.RequestCheckTx{Tx: tx})
+	reqRes.SetCallback(func(res *abci.Response) {
+		mem.reqResCb(tx, txInfo, res, func(response *abci.Response) {
+			if checkTxCb != nil {
+				checkTxCb(response)
+			}
+			mem.updateMtx.RUnlock()
+		})
 	})
-	return err
 }
 
 // It blocks if we're waiting on Update() or Reap().

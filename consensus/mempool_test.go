@@ -169,24 +169,24 @@ func TestMempoolRmBadTx(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, abci.CodeTypeOK, resEndRecheckTx.Code)
 
-	emptyMempoolCh := make(chan struct{})
+	checkTxErrorCh := make(chan error)
 	checkTxRespCh := make(chan struct{})
+	emptyMempoolCh := make(chan struct{})
 	go func() {
 		// Try to send the tx through the mempool.
 		// CheckTx should not err, but the app should return a bad abci code
 		// and the tx should get removed from the pool
 		invalidTx := []byte("invalidTx")
-		err := assertMempool(cs.txNotifier).CheckTxAsync(invalidTx, mempl.TxInfo{}, func(r *abci.Response) {
+		assertMempool(cs.txNotifier).CheckTxAsync(invalidTx, mempl.TxInfo{}, func(err error) {
+			checkTxErrorCh <- err
+		}, func(r *abci.Response) {
 			if r.GetCheckTx().Code != kvstore.CodeTypeInvalidTxFormat {
 				t.Errorf("expected checktx to return invalid format, got %v", r)
 				return
 			}
 			checkTxRespCh <- struct{}{}
 		})
-		if err != nil {
-			t.Errorf("error after CheckTx: %v", err)
-			return
-		}
+		<-checkTxErrorCh
 
 		// check for the tx
 		for {
