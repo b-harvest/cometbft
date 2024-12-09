@@ -277,12 +277,15 @@ func (cli *grpcClient) EndRecheckTxAsync(ctx context.Context, params *types.Requ
 func (cli *grpcClient) CheckTxSyncForApp(context.Context, *types.RequestCheckTx) (*types.ResponseCheckTx, error) {
 	panic("not implemented")
 }
+
 func (cli *grpcClient) CheckTxAsyncForApp(context.Context, *types.RequestCheckTx, types.CheckTxCallback) {
 	panic("not implemented")
 }
+
 func (cli *grpcClient) BeginRecheckTx(ctx context.Context, params *types.RequestBeginRecheckTx) (*types.ResponseBeginRecheckTx, error) {
 	panic("not implemented")
 }
+
 func (cli *grpcClient) EndRecheckTx(ctx context.Context, params *types.RequestEndRecheckTx) (*types.ResponseEndRecheckTx, error) {
 	panic("not implemented")
 }

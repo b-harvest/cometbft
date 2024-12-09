@@ -172,6 +172,7 @@ func (app *localClient) CheckTxSync(ctx context.Context, req *types.RequestCheck
 	// defer app.mtx.Unlock()
 	return app.Application.CheckTxSyncForApp(ctx, req)
 }
+
 func (app *localClient) BeginRecheckTxSync(ctx context.Context, req *types.RequestBeginRecheckTx) (*types.ResponseBeginRecheckTx, error) {
 	app.mtx.Lock()
 	defer app.mtx.Unlock()

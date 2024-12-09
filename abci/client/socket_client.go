@@ -445,12 +445,15 @@ func (cli *socketClient) EndRecheckTxAsync(ctx context.Context, req *types.Reque
 func (cli *socketClient) CheckTxSyncForApp(context.Context, *types.RequestCheckTx) (*types.ResponseCheckTx, error) {
 	panic("not implemented")
 }
+
 func (cli *socketClient) CheckTxAsyncForApp(context.Context, *types.RequestCheckTx, types.CheckTxCallback) {
 	panic("not implemented")
 }
+
 func (cli *socketClient) BeginRecheckTx(ctx context.Context, params *types.RequestBeginRecheckTx) (*types.ResponseBeginRecheckTx, error) {
 	panic("not implemented")
 }
+
 func (cli *socketClient) EndRecheckTx(ctx context.Context, params *types.RequestEndRecheckTx) (*types.ResponseEndRecheckTx, error) {
 	panic("not implemented")
 }
