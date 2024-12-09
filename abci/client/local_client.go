@@ -44,22 +44,6 @@ func (app *localClient) SetResponseCallback(cb Callback) {
 	app.mtx.Unlock()
 }
 
-func (app *localClient) CheckTxAsync(ctx context.Context, req *types.RequestCheckTx) (*ReqRes, error) {
-	// CONTRACT: Application should handle concurrent `CheckTx`
-	// In this abci client layer, we don't protect `CheckTx` with a mutex for concurrency
-	// app.mtx.Lock()
-	// defer app.mtx.Unlock()
-
-	res, err := app.Application.CheckTx(ctx, req)
-	if err != nil {
-		return nil, err
-	}
-	return app.callback(
-		types.ToRequestCheckTx(req),
-		types.ToResponseCheckTx(res),
-	), nil
-}
-
 func (app *localClient) callback(req *types.Request, res *types.Response) *ReqRes {
 	app.Callback(req, res)
 	rr := newLocalReqRes(req, res)
@@ -70,6 +54,7 @@ func (app *localClient) callback(req *types.Request, res *types.Response) *ReqRe
 func newLocalReqRes(req *types.Request, res *types.Response) *ReqRes {
 	reqRes := NewReqRes(req)
 	reqRes.Response = res
+	reqRes.Done()
 	return reqRes
 }
 
@@ -92,15 +77,6 @@ func (app *localClient) Info(ctx context.Context, req *types.RequestInfo) (*type
 	defer app.mtx.Unlock()
 
 	return app.Application.Info(ctx, req)
-}
-
-func (app *localClient) CheckTx(ctx context.Context, req *types.RequestCheckTx) (*types.ResponseCheckTx, error) {
-	// CONTRACT: Application should handle concurrent `CheckTx`
-	// In this abci client layer, we don't protect `CheckTx` with a mutex for concurrency
-	// app.mtx.Lock()
-	// defer app.mtx.Unlock()
-
-	return app.Application.CheckTx(ctx, req)
 }
 
 func (app *localClient) Query(ctx context.Context, req *types.RequestQuery) (*types.ResponseQuery, error) {
@@ -189,16 +165,41 @@ func (app *localClient) FinalizeBlock(ctx context.Context, req *types.RequestFin
 	return app.Application.FinalizeBlock(ctx, req)
 }
 
-func (app *localClient) BeginRecheckTx(ctx context.Context, req *types.RequestBeginRecheckTx) (*types.ResponseBeginRecheckTx, error) {
+func (app *localClient) CheckTxSync(ctx context.Context, req *types.RequestCheckTx) (*types.ResponseCheckTx, error) {
+	// CONTRACT: Application should handle concurrent `CheckTx`
+	// In this abci client layer, we don't protect `CheckTx` with a mutex for concurrency
+	// app.mtx.Lock()
+	// defer app.mtx.Unlock()
+	return app.Application.CheckTxSyncForApp(ctx, req)
+}
+func (app *localClient) BeginRecheckTxSync(ctx context.Context, req *types.RequestBeginRecheckTx) (*types.ResponseBeginRecheckTx, error) {
 	app.mtx.Lock()
 	defer app.mtx.Unlock()
+
 	return app.Application.BeginRecheckTx(ctx, req)
 }
 
-func (app *localClient) EndRecheckTx(ctx context.Context, req *types.RequestEndRecheckTx) (*types.ResponseEndRecheckTx, error) {
+func (app *localClient) EndRecheckTxSync(ctx context.Context, req *types.RequestEndRecheckTx) (*types.ResponseEndRecheckTx, error) {
 	app.mtx.Lock()
 	defer app.mtx.Unlock()
+
 	return app.Application.EndRecheckTx(ctx, req)
+}
+
+func (app *localClient) CheckTxAsync(ctx context.Context, params *types.RequestCheckTx) (*ReqRes, error) {
+	req := types.ToRequestCheckTx(params)
+	reqRes := NewReqRes(req)
+	app.Application.CheckTxAsyncForApp(ctx, params, func(r *types.ResponseCheckTx) {
+		res := types.ToResponseCheckTx(r)
+		app.Callback(req, res)
+		reqRes.Response = res
+		reqRes.Done()
+		// Notify reqRes listener if set
+		if cb := reqRes.GetCallback(); cb != nil {
+			cb(res)
+		}
+	})
+	return reqRes, nil
 }
 
 func (app *localClient) BeginRecheckTxAsync(ctx context.Context, req *types.RequestBeginRecheckTx) (*ReqRes, error) {
@@ -219,4 +220,20 @@ func (app *localClient) EndRecheckTxAsync(ctx context.Context, req *types.Reques
 		types.ToRequestEndRecheckTx(req),
 		types.ToResponseEndRecheckTx(res),
 	), nil
+}
+
+func (app *localClient) CheckTxSyncForApp(context.Context, *types.RequestCheckTx) (*types.ResponseCheckTx, error) {
+	panic("not implemented")
+}
+
+func (app *localClient) CheckTxAsyncForApp(context.Context, *types.RequestCheckTx, types.CheckTxCallback) {
+	panic("not implemented")
+}
+
+func (app *localClient) BeginRecheckTx(ctx context.Context, params *types.RequestBeginRecheckTx) (*types.ResponseBeginRecheckTx, error) {
+	panic("not implemented")
+}
+
+func (app *localClient) EndRecheckTx(ctx context.Context, params *types.RequestEndRecheckTx) (*types.ResponseEndRecheckTx, error) {
+	panic("not implemented")
 }

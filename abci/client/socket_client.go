@@ -120,10 +120,6 @@ func (cli *socketClient) SetResponseCallback(resCb Callback) {
 	cli.mtx.Unlock()
 }
 
-func (cli *socketClient) CheckTxAsync(ctx context.Context, req *types.RequestCheckTx) (*ReqRes, error) {
-	return cli.queueRequest(ctx, types.ToRequestCheckTx(req))
-}
-
 //----------------------------------------
 
 func (cli *socketClient) sendRequestsRoutine(conn io.Writer) {
@@ -269,17 +265,6 @@ func (cli *socketClient) Info(ctx context.Context, req *types.RequestInfo) (*typ
 	return reqRes.Response.GetInfo(), cli.Error()
 }
 
-func (cli *socketClient) CheckTx(ctx context.Context, req *types.RequestCheckTx) (*types.ResponseCheckTx, error) {
-	reqRes, err := cli.queueRequest(ctx, types.ToRequestCheckTx(req))
-	if err != nil {
-		return nil, err
-	}
-	if err := cli.Flush(ctx); err != nil {
-		return nil, err
-	}
-	return reqRes.Response.GetCheckTx(), cli.Error()
-}
-
 func (cli *socketClient) Query(ctx context.Context, req *types.RequestQuery) (*types.ResponseQuery, error) {
 	reqRes, err := cli.queueRequest(ctx, types.ToRequestQuery(req))
 	if err != nil {
@@ -412,7 +397,18 @@ func (cli *socketClient) FinalizeBlock(ctx context.Context, req *types.RequestFi
 	return reqRes.Response.GetFinalizeBlock(), cli.Error()
 }
 
-func (cli *socketClient) BeginRecheckTx(ctx context.Context, req *types.RequestBeginRecheckTx) (*types.ResponseBeginRecheckTx, error) {
+func (cli *socketClient) CheckTxSync(ctx context.Context, req *types.RequestCheckTx) (*types.ResponseCheckTx, error) {
+	reqRes, err := cli.queueRequest(ctx, types.ToRequestCheckTx(req))
+	if err != nil {
+		return nil, err
+	}
+	if err := cli.Flush(ctx); err != nil {
+		return nil, err
+	}
+	return reqRes.Response.GetCheckTx(), cli.Error()
+}
+
+func (cli *socketClient) BeginRecheckTxSync(ctx context.Context, req *types.RequestBeginRecheckTx) (*types.ResponseBeginRecheckTx, error) {
 	reqRes, err := cli.queueRequest(ctx, types.ToRequestBeginRecheckTx(req))
 	if err != nil {
 		return nil, err
@@ -423,7 +419,7 @@ func (cli *socketClient) BeginRecheckTx(ctx context.Context, req *types.RequestB
 	return reqRes.Response.GetBeginRecheckTx(), cli.Error()
 }
 
-func (cli *socketClient) EndRecheckTx(ctx context.Context, req *types.RequestEndRecheckTx) (*types.ResponseEndRecheckTx, error) {
+func (cli *socketClient) EndRecheckTxSync(ctx context.Context, req *types.RequestEndRecheckTx) (*types.ResponseEndRecheckTx, error) {
 	reqRes, err := cli.queueRequest(ctx, types.ToRequestEndRecheckTx(req))
 	if err != nil {
 		return nil, err
@@ -434,12 +430,29 @@ func (cli *socketClient) EndRecheckTx(ctx context.Context, req *types.RequestEnd
 	return reqRes.Response.GetEndRecheckTx(), cli.Error()
 }
 
+func (cli *socketClient) CheckTxAsync(ctx context.Context, req *types.RequestCheckTx) (*ReqRes, error) {
+	return cli.queueRequest(ctx, types.ToRequestCheckTx(req))
+}
+
 func (cli *socketClient) BeginRecheckTxAsync(ctx context.Context, req *types.RequestBeginRecheckTx) (*ReqRes, error) {
 	return cli.queueRequest(ctx, types.ToRequestBeginRecheckTx(req))
 }
 
 func (cli *socketClient) EndRecheckTxAsync(ctx context.Context, req *types.RequestEndRecheckTx) (*ReqRes, error) {
 	return cli.queueRequest(ctx, types.ToRequestEndRecheckTx(req))
+}
+
+func (cli *socketClient) CheckTxSyncForApp(context.Context, *types.RequestCheckTx) (*types.ResponseCheckTx, error) {
+	panic("not implemented")
+}
+func (cli *socketClient) CheckTxAsyncForApp(context.Context, *types.RequestCheckTx, types.CheckTxCallback) {
+	panic("not implemented")
+}
+func (cli *socketClient) BeginRecheckTx(ctx context.Context, params *types.RequestBeginRecheckTx) (*types.ResponseBeginRecheckTx, error) {
+	panic("not implemented")
+}
+func (cli *socketClient) EndRecheckTx(ctx context.Context, params *types.RequestEndRecheckTx) (*types.ResponseEndRecheckTx, error) {
+	panic("not implemented")
 }
 
 func (cli *socketClient) queueRequest(ctx context.Context, req *types.Request) (*ReqRes, error) {

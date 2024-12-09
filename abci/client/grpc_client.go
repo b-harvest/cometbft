@@ -161,15 +161,6 @@ func (cli *grpcClient) SetResponseCallback(resCb Callback) {
 
 //----------------------------------------
 
-func (cli *grpcClient) CheckTxAsync(ctx context.Context, req *types.RequestCheckTx) (*ReqRes, error) {
-	res, err := cli.client.CheckTx(ctx, req, grpc.WaitForReady(true))
-	if err != nil {
-		cli.StopForError(err)
-		return nil, err
-	}
-	return cli.finishAsyncCall(types.ToRequestCheckTx(req), &types.Response{Value: &types.Response_CheckTx{CheckTx: res}}), nil
-}
-
 // finishAsyncCall creates a ReqRes for an async call, and immediately populates it
 // with the response. We don't complete it until it's been ordered via the channel.
 func (cli *grpcClient) finishAsyncCall(req *types.Request, res *types.Response) *ReqRes {
@@ -192,10 +183,6 @@ func (cli *grpcClient) Echo(ctx context.Context, msg string) (*types.ResponseEch
 
 func (cli *grpcClient) Info(ctx context.Context, req *types.RequestInfo) (*types.ResponseInfo, error) {
 	return cli.client.Info(ctx, req, grpc.WaitForReady(true))
-}
-
-func (cli *grpcClient) CheckTx(ctx context.Context, req *types.RequestCheckTx) (*types.ResponseCheckTx, error) {
-	return cli.client.CheckTx(ctx, req, grpc.WaitForReady(true))
 }
 
 func (cli *grpcClient) Query(ctx context.Context, req *types.RequestQuery) (*types.ResponseQuery, error) {
@@ -246,14 +233,27 @@ func (cli *grpcClient) FinalizeBlock(ctx context.Context, req *types.RequestFina
 	return cli.client.FinalizeBlock(ctx, types.ToRequestFinalizeBlock(req).GetFinalizeBlock(), grpc.WaitForReady(true))
 }
 
-func (cli *grpcClient) BeginRecheckTx(ctx context.Context, params *types.RequestBeginRecheckTx) (*types.ResponseBeginRecheckTx, error) {
+func (cli *grpcClient) CheckTxSync(ctx context.Context, req *types.RequestCheckTx) (*types.ResponseCheckTx, error) {
+	return cli.client.CheckTx(ctx, req, grpc.WaitForReady(true))
+}
+
+func (cli *grpcClient) BeginRecheckTxSync(ctx context.Context, params *types.RequestBeginRecheckTx) (*types.ResponseBeginRecheckTx, error) {
 	reqres, _ := cli.BeginRecheckTxAsync(ctx, params)
 	return reqres.Response.GetBeginRecheckTx(), cli.Error()
 }
 
-func (cli *grpcClient) EndRecheckTx(ctx context.Context, params *types.RequestEndRecheckTx) (*types.ResponseEndRecheckTx, error) {
+func (cli *grpcClient) EndRecheckTxSync(ctx context.Context, params *types.RequestEndRecheckTx) (*types.ResponseEndRecheckTx, error) {
 	reqres, _ := cli.EndRecheckTxAsync(ctx, params)
 	return reqres.Response.GetEndRecheckTx(), cli.Error()
+}
+
+func (cli *grpcClient) CheckTxAsync(ctx context.Context, req *types.RequestCheckTx) (*ReqRes, error) {
+	res, err := cli.client.CheckTx(ctx, req, grpc.WaitForReady(true))
+	if err != nil {
+		cli.StopForError(err)
+		return nil, err
+	}
+	return cli.finishAsyncCall(types.ToRequestCheckTx(req), &types.Response{Value: &types.Response_CheckTx{CheckTx: res}}), nil
 }
 
 func (cli *grpcClient) BeginRecheckTxAsync(ctx context.Context, params *types.RequestBeginRecheckTx) (*ReqRes, error) {
@@ -272,4 +272,17 @@ func (cli *grpcClient) EndRecheckTxAsync(ctx context.Context, params *types.Requ
 		cli.StopForError(err)
 	}
 	return cli.finishAsyncCall(req, &types.Response{Value: &types.Response_EndRecheckTx{EndRecheckTx: res}}), nil
+}
+
+func (cli *grpcClient) CheckTxSyncForApp(context.Context, *types.RequestCheckTx) (*types.ResponseCheckTx, error) {
+	panic("not implemented")
+}
+func (cli *grpcClient) CheckTxAsyncForApp(context.Context, *types.RequestCheckTx, types.CheckTxCallback) {
+	panic("not implemented")
+}
+func (cli *grpcClient) BeginRecheckTx(ctx context.Context, params *types.RequestBeginRecheckTx) (*types.ResponseBeginRecheckTx, error) {
+	panic("not implemented")
+}
+func (cli *grpcClient) EndRecheckTx(ctx context.Context, params *types.RequestEndRecheckTx) (*types.ResponseEndRecheckTx, error) {
+	panic("not implemented")
 }

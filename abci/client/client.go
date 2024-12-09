@@ -38,6 +38,11 @@ type Client interface {
 	// for the v0 mempool. We should explore refactoring the
 	// mempool to remove this vestige behavior.
 	SetResponseCallback(Callback)
+
+	CheckTxSync(context.Context, *types.RequestCheckTx) (*types.ResponseCheckTx, error)
+	BeginRecheckTxSync(context.Context, *types.RequestBeginRecheckTx) (*types.ResponseBeginRecheckTx, error) // Signals the beginning of rechecking
+	EndRecheckTxSync(context.Context, *types.RequestEndRecheckTx) (*types.ResponseEndRecheckTx, error)       // Signals the end of rechecking
+
 	CheckTxAsync(context.Context, *types.RequestCheckTx) (*ReqRes, error)
 	BeginRecheckTxAsync(context.Context, *types.RequestBeginRecheckTx) (*ReqRes, error)
 	EndRecheckTxAsync(context.Context, *types.RequestEndRecheckTx) (*ReqRes, error)
