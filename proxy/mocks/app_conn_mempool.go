@@ -234,7 +234,7 @@ func (_m *AppConnMempool) Flush(_a0 context.Context) error {
 }
 
 // SetResponseCallback provides a mock function with given fields: _a0
-func (_m *AppConnMempool) SetResponseCallback(_a0 abcicli.Callback) {
+func (_m *AppConnMempool) SetResponseCallback(_a0 abcicli.GlobalCallback) {
 	_m.Called(_a0)
 }
 

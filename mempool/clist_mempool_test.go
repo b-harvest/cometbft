@@ -272,13 +272,13 @@ func TestMempoolUpdate(t *testing.T) {
 }
 
 func TestMempoolUpdateDoesNotPanicWhenApplicationMissedTx(t *testing.T) {
-	var callback abciclient.Callback
+	var callback abciclient.GlobalCallback
 	mockClient := new(abciclimocks.Client)
 	mockClient.On("Start").Return(nil)
 	mockClient.On("SetLogger", mock.Anything)
 
 	mockClient.On("Error").Return(nil).Times(4)
-	mockClient.On("SetResponseCallback", mock.MatchedBy(func(cb abciclient.Callback) bool { callback = cb; return true }))
+	mockClient.On("SetResponseCallback", mock.MatchedBy(func(cb abciclient.GlobalCallback) bool { callback = cb; return true }))
 	mockClient.On("Flush", mock.Anything).Return(nil)
 
 	mp, cleanup, err := newMempoolWithAppMock(mockClient)
@@ -864,12 +864,12 @@ func TestMempoolSyncRecheckTxReturnError(t *testing.T) {
 // Test that rechecking finishes correctly when a CheckTx response never arrives, when using an
 // async ABCI client.
 func TestMempoolAsyncRecheckTxReturnError(t *testing.T) {
-	var callback abciclient.Callback
+	var callback abciclient.GlobalCallback
 	mockClient := new(abciclimocks.Client)
 	mockClient.On("Start").Return(nil)
 	mockClient.On("SetLogger", mock.Anything)
 	mockClient.On("Error").Return(nil).Times(4)
-	mockClient.On("SetResponseCallback", mock.MatchedBy(func(cb abciclient.Callback) bool { callback = cb; return true }))
+	mockClient.On("SetResponseCallback", mock.MatchedBy(func(cb abciclient.GlobalCallback) bool { callback = cb; return true }))
 
 	mp, cleanup, err := newMempoolWithAppMock(mockClient)
 	require.NoError(t, err)
@@ -1006,7 +1006,7 @@ func newRemoteApp(tb testing.TB, addr string, app abci.Application) (abciclient.
 }
 
 func newReqRes(tx types.Tx, code uint32, requestType abci.CheckTxType) *abciclient.ReqRes { //nolint: unparam
-	reqRes := abciclient.NewReqRes(abci.ToRequestCheckTx(&abci.RequestCheckTx{Tx: tx, Type: requestType}))
+	reqRes := abciclient.NewReqRes(abci.ToRequestCheckTx(&abci.RequestCheckTx{Tx: tx, Type: requestType}), nil)
 	reqRes.Response = abci.ToResponseCheckTx(&abci.ResponseCheckTx{Code: code})
 	return reqRes
 }

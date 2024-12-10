@@ -37,15 +37,16 @@ type Client interface {
 	// with the exception of `CheckTxAsync` which we maintain
 	// for the v0 mempool. We should explore refactoring the
 	// mempool to remove this vestige behavior.
-	SetResponseCallback(Callback)
+	SetGlobalCallback(GlobalCallback)
+	GetGlobalCallback() GlobalCallback
 
 	CheckTxSync(context.Context, *types.RequestCheckTx) (*types.ResponseCheckTx, error)
 	BeginRecheckTxSync(context.Context, *types.RequestBeginRecheckTx) (*types.ResponseBeginRecheckTx, error) // Signals the beginning of rechecking
 	EndRecheckTxSync(context.Context, *types.RequestEndRecheckTx) (*types.ResponseEndRecheckTx, error)       // Signals the end of rechecking
 
-	CheckTxAsync(context.Context, *types.RequestCheckTx) (*ReqRes, error)
-	BeginRecheckTxAsync(context.Context, *types.RequestBeginRecheckTx) (*ReqRes, error)
-	EndRecheckTxAsync(context.Context, *types.RequestEndRecheckTx) (*ReqRes, error)
+	CheckTxAsync(context.Context, *types.RequestCheckTx, ResponseCallback) (*ReqRes, error)
+	BeginRecheckTxAsync(context.Context, *types.RequestBeginRecheckTx, ResponseCallback) (*ReqRes, error)
+	EndRecheckTxAsync(context.Context, *types.RequestEndRecheckTx, ResponseCallback) (*ReqRes, error)
 }
 
 //----------------------------------------
@@ -64,73 +65,63 @@ func NewClient(addr, transport string, mustConnect bool) (client Client, err err
 	return
 }
 
-type Callback func(*types.Request, *types.Response)
+type GlobalCallback func(*types.Request, *types.Response)
+type ResponseCallback func(*types.Response)
 
 type ReqRes struct {
 	*types.Request
-	*sync.WaitGroup
 	*types.Response // Not set atomically, so be sure to use WaitGroup.
 
 	mtx cmtsync.Mutex
 
-	// callbackInvoked as a variable to track if the callback was already
-	// invoked during the regular execution of the request. This variable
-	// allows clients to set the callback simultaneously without potentially
-	// invoking the callback twice by accident, once when 'SetCallback' is
-	// called and once during the normal request.
-	callbackInvoked bool
-	cb              func(*types.Response) // A single callback that may be set.
+	wg   *sync.WaitGroup
+	done bool
+	cb   func(*types.Response) // A single callback that may be set.
 }
 
-func NewReqRes(req *types.Request) *ReqRes {
+func NewReqRes(req *types.Request, cb ResponseCallback) *ReqRes {
 	return &ReqRes{
-		Request:   req,
-		WaitGroup: waitGroup1(),
-		Response:  nil,
+		Request:  req,
+		Response: nil,
 
-		callbackInvoked: false,
-		cb:              nil,
+		wg:   waitGroup1(),
+		done: false,
+		cb:   cb,
 	}
-}
-
-// Sets sets the callback. If reqRes is already done, it will call the cb
-// immediately. Note, reqRes.cb should not change if reqRes.done and only one
-// callback is supported.
-func (r *ReqRes) SetCallback(cb func(res *types.Response)) {
-	r.mtx.Lock()
-
-	if r.callbackInvoked {
-		r.mtx.Unlock()
-		cb(r.Response)
-		return
-	}
-
-	r.cb = cb
-	r.mtx.Unlock()
 }
 
 // InvokeCallback invokes a thread-safe execution of the configured callback
 // if non-nil.
-func (r *ReqRes) InvokeCallback() {
-	r.mtx.Lock()
-	defer r.mtx.Unlock()
+func (reqRes *ReqRes) InvokeCallback() {
+	reqRes.mtx.Lock()
+	defer reqRes.mtx.Unlock()
 
-	if r.cb != nil {
-		r.cb(r.Response)
+	if reqRes.cb != nil {
+		reqRes.cb(reqRes.Response)
 	}
-	r.callbackInvoked = true
 }
 
-// GetCallback returns the configured callback of the ReqRes object which may be
-// nil. Note, it is not safe to concurrently call this in cases where it is
-// marked done and SetCallback is called before calling GetCallback as that
-// will invoke the callback twice and create a potential race condition.
-//
-// ref: https://github.com/tendermint/tendermint/issues/5439
-func (r *ReqRes) GetCallback() func(*types.Response) {
+func (r *ReqRes) SetDone(res *types.Response) (set bool) {
 	r.mtx.Lock()
-	defer r.mtx.Unlock()
-	return r.cb
+	// TODO should we panic if it's already done?
+	set = !r.done
+	if set {
+		r.Response = res
+		r.done = true
+		r.wg.Done()
+	}
+	r.mtx.Unlock()
+
+	// NOTE `r.cb` is immutable so we're safe to access it at here without `mtx`
+	if set && r.cb != nil {
+		r.cb(res)
+	}
+
+	return set
+}
+
+func (r *ReqRes) Wait() {
+	r.wg.Wait()
 }
 
 func waitGroup1() (wg *sync.WaitGroup) {

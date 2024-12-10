@@ -17,7 +17,9 @@ type localClient struct {
 
 	mtx *cmtsync.Mutex
 	types.Application
-	Callback
+
+	globalCbMtx cmtsync.Mutex
+	globalCb    GlobalCallback
 }
 
 var _ Client = (*localClient)(nil)
@@ -38,23 +40,26 @@ func NewLocalClient(mtx *cmtsync.Mutex, app types.Application) Client {
 	return cli
 }
 
-func (app *localClient) SetResponseCallback(cb Callback) {
-	app.mtx.Lock()
-	app.Callback = cb
-	app.mtx.Unlock()
+func (app *localClient) SetGlobalCallback(globalCb GlobalCallback) {
+	app.globalCbMtx.Lock()
+	app.globalCb = globalCb
+	app.globalCbMtx.Unlock()
 }
 
-func (app *localClient) callback(req *types.Request, res *types.Response) *ReqRes {
-	app.Callback(req, res)
-	rr := newLocalReqRes(req, res)
-	rr.callbackInvoked = true
-	return rr
+func (app *localClient) GetGlobalCallback() (cb GlobalCallback) {
+	app.globalCbMtx.Lock()
+	cb = app.globalCb
+	app.globalCbMtx.Unlock()
+	return cb
 }
 
-func newLocalReqRes(req *types.Request, res *types.Response) *ReqRes {
-	reqRes := NewReqRes(req)
-	reqRes.Response = res
-	reqRes.Done()
+func (app *localClient) done(reqRes *ReqRes, res *types.Response) *ReqRes {
+	set := reqRes.SetDone(res)
+	if set {
+		if globalCb := app.GetGlobalCallback(); globalCb != nil {
+			globalCb(reqRes.Request, res)
+		}
+	}
 	return reqRes
 }
 
@@ -187,40 +192,30 @@ func (app *localClient) EndRecheckTxSync(ctx context.Context, req *types.Request
 	return app.Application.EndRecheckTx(ctx, req)
 }
 
-func (app *localClient) CheckTxAsync(ctx context.Context, params *types.RequestCheckTx) (*ReqRes, error) {
+func (app *localClient) CheckTxAsync(ctx context.Context, params *types.RequestCheckTx, cb ResponseCallback) (*ReqRes, error) {
 	req := types.ToRequestCheckTx(params)
-	reqRes := NewReqRes(req)
+	reqRes := NewReqRes(req, cb)
 	app.Application.CheckTxAsyncForApp(ctx, params, func(r *types.ResponseCheckTx) {
 		res := types.ToResponseCheckTx(r)
-		app.Callback(req, res)
-		reqRes.Response = res
-		reqRes.Done()
-		// Notify reqRes listener if set
-		if cb := reqRes.GetCallback(); cb != nil {
-			cb(res)
-		}
+		app.done(reqRes, res)
 	})
 	return reqRes, nil
 }
 
-func (app *localClient) BeginRecheckTxAsync(ctx context.Context, req *types.RequestBeginRecheckTx) (*ReqRes, error) {
+func (app *localClient) BeginRecheckTxAsync(ctx context.Context, req *types.RequestBeginRecheckTx, cb ResponseCallback) (*ReqRes, error) {
 	app.mtx.Lock()
 	defer app.mtx.Unlock()
+	reqRes := NewReqRes(types.ToRequestBeginRecheckTx(req), cb)
 	res, _ := app.Application.BeginRecheckTx(ctx, req)
-	return app.callback(
-		types.ToRequestBeginRecheckTx(req),
-		types.ToResponseBeginRecheckTx(res),
-	), nil
+	return app.done(reqRes, types.ToResponseBeginRecheckTx(res)), nil
 }
 
-func (app *localClient) EndRecheckTxAsync(ctx context.Context, req *types.RequestEndRecheckTx) (*ReqRes, error) {
+func (app *localClient) EndRecheckTxAsync(ctx context.Context, req *types.RequestEndRecheckTx, cb ResponseCallback) (*ReqRes, error) {
 	app.mtx.Lock()
 	defer app.mtx.Unlock()
+	reqRes := NewReqRes(types.ToRequestEndRecheckTx(req), cb)
 	res, _ := app.Application.EndRecheckTx(ctx, req)
-	return app.callback(
-		types.ToRequestEndRecheckTx(req),
-		types.ToResponseEndRecheckTx(res),
-	), nil
+	return app.done(reqRes, types.ToResponseEndRecheckTx(res)), nil
 }
 
 func (app *localClient) CheckTxSyncForApp(context.Context, *types.RequestCheckTx) (*types.ResponseCheckTx, error) {

@@ -91,7 +91,7 @@ func NewCListMempool(
 		mp.cache = NopTxCache{}
 	}
 
-	proxyAppConn.SetResponseCallback(mp.globalCb)
+	proxyAppConn.SetGlobalCallback(mp.globalCb)
 
 	for _, option := range options {
 		option(mp)
@@ -187,8 +187,8 @@ func (mem *CListMempool) FlushAppConn() error {
 
 // XXX: Unsafe! Calling Flush may leave mempool in inconsistent state.
 func (mem *CListMempool) Flush() {
-	mem.updateMtx.RLock()
-	defer mem.updateMtx.RUnlock()
+	mem.updateMtx.Lock()
+	defer mem.updateMtx.Unlock()
 
 	mem.txsBytes.Store(0)
 	mem.cache.Reset()
@@ -270,8 +270,7 @@ func (mem *CListMempool) checkTxAsync(tx types.Tx, txInfo TxInfo, prepareCb func
 	}
 
 	// CONTRACT: `app.CheckTxAsync()` should check whether `GasWanted` is valid (0 <= GasWanted <= block.masGas)
-	reqRes, _ := mem.proxyAppConn.CheckTxAsync(context.TODO(), &abci.RequestCheckTx{Tx: tx})
-	reqRes.SetCallback(func(res *abci.Response) {
+	mem.proxyAppConn.CheckTxAsync(context.TODO(), &abci.RequestCheckTx{Tx: tx}, func(res *abci.Response) {
 		mem.reqResCb(tx, txInfo, res, func(response *abci.Response) {
 			if checkTxCb != nil {
 				checkTxCb(response)
@@ -731,11 +730,11 @@ func (mem *CListMempool) recheckTxs() {
 		tx := e.Value.(*mempoolTx).tx
 		// Send a CheckTx request to the app. If we're using a sync client, the resCbRecheck
 		// callback will be called right after receiving the response.
-		reqRes, _ := mem.proxyAppConn.CheckTxAsync(context.TODO(), &abci.RequestCheckTx{
+		req := abci.RequestCheckTx{
 			Tx:   tx,
 			Type: abci.CheckTxType_Recheck,
-		})
-		reqRes.SetCallback(func(res *abci.Response) {
+		}
+		mem.proxyAppConn.CheckTxAsync(context.TODO(), &req, func(res *abci.Response) {
 			wg.Done()
 		})
 	}
