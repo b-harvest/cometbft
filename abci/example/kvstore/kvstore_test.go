@@ -33,7 +33,15 @@ func TestKVStoreKV(t *testing.T) {
 }
 
 func testKVStore(ctx context.Context, t *testing.T, app types.Application, tx []byte, key, value string) {
-	checkTxResp, err := app.CheckTxSyncForApp(ctx, &types.RequestCheckTx{Tx: tx})
+	var (
+		checkTxResp *types.ResponseCheckTx
+		err         error
+	)
+	if client, ok := app.(abcicli.Client); ok {
+		checkTxResp, err = client.CheckTxSync(ctx, &types.RequestCheckTx{Tx: tx})
+	} else {
+		checkTxResp, err = app.CheckTxSyncForApp(ctx, &types.RequestCheckTx{Tx: tx})
+	}
 	require.NoError(t, err)
 	require.Equal(t, uint32(0), checkTxResp.Code)
 
