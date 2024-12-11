@@ -90,7 +90,6 @@ func NewCListMempool(
 	} else {
 		mp.cache = NopTxCache{}
 	}
-
 	proxyAppConn.SetGlobalCallback(mp.globalCb)
 
 	for _, option := range options {

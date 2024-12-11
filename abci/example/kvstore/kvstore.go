@@ -127,18 +127,26 @@ func (app *Application) InitChain(_ context.Context, req *types.RequestInitChain
 // - Contains one and only one `=`
 // - `=` is not the first or last byte.
 // - if key is `val` that the validator update transaction is also valid
-func (app *Application) CheckTx(_ context.Context, req *types.RequestCheckTx) (*types.ResponseCheckTx, error) {
+func (app *Application) CheckTxSyncForApp(_ context.Context, req *types.RequestCheckTx) (*types.ResponseCheckTx, error) {
+	return app.checkTx(req), nil
+}
+
+func (app *Application) CheckTxAsyncForApp(_ context.Context, req *types.RequestCheckTx, callback types.CheckTxCallback) {
+	callback(app.checkTx(req))
+}
+
+func (app *Application) checkTx(req *types.RequestCheckTx) *types.ResponseCheckTx {
 	// If it is a validator update transaction, check that it is correctly formatted
 	if isValidatorTx(req.Tx) {
 		if _, _, _, err := parseValidatorTx(req.Tx); err != nil {
 			//nolint:nilerr
-			return &types.ResponseCheckTx{Code: CodeTypeInvalidTxFormat}, nil
+			return &types.ResponseCheckTx{Code: CodeTypeInvalidTxFormat}
 		}
 	} else if !isValidTx(req.Tx) {
-		return &types.ResponseCheckTx{Code: CodeTypeInvalidTxFormat}, nil
+		return &types.ResponseCheckTx{Code: CodeTypeInvalidTxFormat}
 	}
 
-	return &types.ResponseCheckTx{Code: CodeTypeOK, GasWanted: 1}, nil
+	return &types.ResponseCheckTx{Code: CodeTypeOK, GasWanted: 1}
 }
 
 // Tx must have a format like key:value or key=value. That is:
@@ -170,7 +178,7 @@ func (app *Application) PrepareProposal(ctx context.Context, req *types.RequestP
 func (app *Application) formatTxs(ctx context.Context, blockData [][]byte) [][]byte {
 	txs := make([][]byte, 0, len(blockData))
 	for _, tx := range blockData {
-		if resp, err := app.CheckTx(ctx, &types.RequestCheckTx{Tx: tx}); err == nil && resp.Code == CodeTypeOK {
+		if resp, err := app.CheckTxSyncForApp(ctx, &types.RequestCheckTx{Tx: tx}); err == nil && resp.Code == CodeTypeOK {
 			txs = append(txs, bytes.Replace(tx, []byte(":"), []byte("="), 1))
 		}
 	}
@@ -182,7 +190,7 @@ func (app *Application) formatTxs(ctx context.Context, blockData [][]byte) [][]b
 func (app *Application) ProcessProposal(ctx context.Context, req *types.RequestProcessProposal) (*types.ResponseProcessProposal, error) {
 	for _, tx := range req.Txs {
 		// As CheckTx is a full validity check we can simply reuse this
-		if resp, err := app.CheckTx(ctx, &types.RequestCheckTx{Tx: tx}); err != nil || resp.Code != CodeTypeOK {
+		if resp, err := app.CheckTxSyncForApp(ctx, &types.RequestCheckTx{Tx: tx}); err != nil || resp.Code != CodeTypeOK {
 			return &types.ResponseProcessProposal{Status: types.ResponseProcessProposal_REJECT}, nil
 		}
 	}
