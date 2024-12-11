@@ -79,8 +79,12 @@ func TestCacheAfterUpdate(t *testing.T) {
 
 		for _, v := range tc.reAddIndices {
 			tx := kvstore.NewTx(fmt.Sprintf("%d", v), "value")
-			resp, _ := mp.CheckTxSync(tx, TxInfo{})
-			require.False(t, resp.GetCheckTx().IsErr())
+			resp, err := mp.CheckTxSync(tx, TxInfo{})
+			if err != nil {
+				require.Nil(t, resp)
+			} else {
+				require.False(t, resp.GetCheckTx().IsErr())
+			}
 		}
 
 		cache := mp.cache.(*LRUTxCache)
