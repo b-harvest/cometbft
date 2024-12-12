@@ -55,7 +55,7 @@ func TestHangingAsyncCalls(t *testing.T) {
 		require.NoError(t, err)
 		// wait 50 ms for all events to travel socket, but
 		// no response yet from server
-		time.Sleep(50 * time.Millisecond)
+		// time.Sleep(1 * time.Millisecond)
 		// kill the server, so the connections break
 		err = s.Stop()
 		require.NoError(t, err)
