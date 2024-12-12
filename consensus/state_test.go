@@ -1505,6 +1505,10 @@ func TestExtendVoteCalledWhenEnabled(t *testing.T) {
 			}
 			m.On("Commit", mock.Anything, mock.Anything).Return(&abci.ResponseCommit{}, nil).Maybe()
 			m.On("FinalizeBlock", mock.Anything, mock.Anything).Return(&abci.ResponseFinalizeBlock{}, nil).Maybe()
+
+			m.On("BeginRecheckTx", mock.Anything, mock.Anything).Return(&abci.ResponseBeginRecheckTx{}, nil).Maybe()
+			m.On("EndRecheckTx", mock.Anything, mock.Anything).Return(&abci.ResponseEndRecheckTx{}, nil).Maybe()
+
 			height := int64(1)
 			if !testCase.enabled {
 				height = 0
