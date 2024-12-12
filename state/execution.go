@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os"
 	"time"
 
 	abci "github.com/cometbft/cometbft/abci/types"
@@ -43,6 +44,9 @@ type BlockExecutor struct {
 	logger log.Logger
 
 	metrics *Metrics
+
+	// timeTrackingLog is a file to log the time taken for each block processing
+	timeTrackingLog *os.File
 }
 
 type BlockExecutorOption func(executor *BlockExecutor)
@@ -79,6 +83,12 @@ func NewBlockExecutor(
 		option(res)
 	}
 
+	var err error
+	res.timeTrackingLog, err = os.OpenFile("/tmp/blockExec-timeTracking.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		res.logger.Error("failed to open time tracking log", "err", err)
+		os.Exit(1)
+	}
 	return res
 }
 
@@ -318,6 +328,11 @@ func (blockExec *BlockExecutor) applyBlock(state State, blockID types.BlockID, b
 	// Events are fired after everything else.
 	// NOTE: if we crash between Commit and Save, events wont be fired during replay
 	fireEvents(blockExec.logger, blockExec.eventBus, block, blockID, abciResponse, validatorUpdates)
+
+	logLine := fmt.Sprintf("applyBlock(%d):: FinishedAt %d\n", block.Height, time.Now().UTC().UnixNano())
+	if _, err := blockExec.timeTrackingLog.WriteString(logLine); err != nil {
+		blockExec.logger.Error("failed to write to time tracking log", "err", err)
+	}
 
 	return state, nil
 }
