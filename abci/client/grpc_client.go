@@ -23,27 +23,21 @@ type grpcClient struct {
 	service.BaseService
 	mustConnect bool
 
-	client   types.ABCIClient
-	conn     *grpc.ClientConn
-	chReqRes chan *ReqRes // dispatches "async" responses to callbacks *in order*, needed by mempool
+	client types.ABCIClient
+	conn   *grpc.ClientConn
 
-	mtx   sync.Mutex
-	addr  string
-	err   error
-	resCb func(*types.Request, *types.Response) // listens to all callbacks
+	mtx  sync.Mutex
+	addr string
+	err  error
+
+	globalCbMtx sync.Mutex
+	globalCb    func(*types.Request, *types.Response) // listens to all callbacks
 }
 
 func NewGRPCClient(addr string, mustConnect bool) Client {
 	cli := &grpcClient{
 		addr:        addr,
 		mustConnect: mustConnect,
-		// Buffering the channel is needed to make calls appear asynchronous,
-		// which is required when the caller makes multiple async calls before
-		// processing callbacks (e.g. due to holding locks). 64 means that a
-		// caller can make up to 64 async calls before a callback must be
-		// processed (otherwise it deadlocks). It also means that we can make 64
-		// gRPC calls while processing a slow callback at the channel head.
-		chReqRes: make(chan *ReqRes, 64),
 	}
 	cli.BaseService = *service.NewBaseService(nil, "grpcClient", cli)
 	return cli
@@ -57,33 +51,6 @@ func (cli *grpcClient) OnStart() error {
 	if err := cli.BaseService.OnStart(); err != nil {
 		return err
 	}
-
-	// This processes asynchronous request/response messages and dispatches
-	// them to callbacks.
-	go func() {
-		// Use a separate function to use defer for mutex unlocks (this handles panics)
-		callCb := func(reqres *ReqRes) {
-			cli.mtx.Lock()
-			defer cli.mtx.Unlock()
-
-			reqres.Done()
-
-			// Notify client listener if set
-			if cli.resCb != nil {
-				cli.resCb(reqres.Request, reqres.Response)
-			}
-
-			// Notify reqRes listener if set
-			reqres.InvokeCallback()
-		}
-		for reqres := range cli.chReqRes {
-			if reqres != nil {
-				callCb(reqres)
-			} else {
-				cli.Logger.Error("Received nil reqres")
-			}
-		}
-	}()
 
 RETRY_LOOP:
 	for {
@@ -125,7 +92,6 @@ func (cli *grpcClient) OnStop() {
 	if cli.conn != nil {
 		cli.conn.Close()
 	}
-	close(cli.chReqRes)
 }
 
 func (cli *grpcClient) StopForError(err error) {
@@ -151,32 +117,36 @@ func (cli *grpcClient) Error() error {
 	return cli.err
 }
 
-// Set listener for all responses
-// NOTE: callback may get internally generated flush responses.
-func (cli *grpcClient) SetResponseCallback(resCb Callback) {
-	cli.mtx.Lock()
-	cli.resCb = resCb
-	cli.mtx.Unlock()
+func (cli *grpcClient) SetGlobalCallback(globalCb GlobalCallback) {
+	cli.globalCbMtx.Lock()
+	cli.globalCb = globalCb
+	cli.globalCbMtx.Unlock()
+}
+
+func (cli *grpcClient) GetGlobalCallback() (cb GlobalCallback) {
+	cli.globalCbMtx.Lock()
+	cb = cli.globalCb
+	cli.globalCbMtx.Unlock()
+	return cb
 }
 
 //----------------------------------------
 
-func (cli *grpcClient) CheckTxAsync(ctx context.Context, req *types.RequestCheckTx) (*ReqRes, error) {
-	res, err := cli.client.CheckTx(ctx, req, grpc.WaitForReady(true))
-	if err != nil {
-		cli.StopForError(err)
-		return nil, err
-	}
-	return cli.finishAsyncCall(types.ToRequestCheckTx(req), &types.Response{Value: &types.Response_CheckTx{CheckTx: res}}), nil
-}
+func (cli *grpcClient) finishAsyncCall(req *types.Request, res *types.Response, cb ResponseCallback) *ReqRes {
+	reqRes := NewReqRes(req, cb)
 
-// finishAsyncCall creates a ReqRes for an async call, and immediately populates it
-// with the response. We don't complete it until it's been ordered via the channel.
-func (cli *grpcClient) finishAsyncCall(req *types.Request, res *types.Response) *ReqRes {
-	reqres := NewReqRes(req)
-	reqres.Response = res
-	cli.chReqRes <- reqres // use channel for async responses, since they must be ordered
-	return reqres
+	// goroutine for callbacks
+	go func() {
+		set := reqRes.SetDone(res)
+		if set {
+			// Notify client listener if set
+			if globalCb := cli.GetGlobalCallback(); globalCb != nil {
+				globalCb(req, res)
+			}
+		}
+	}()
+
+	return reqRes
 }
 
 //----------------------------------------
@@ -192,10 +162,6 @@ func (cli *grpcClient) Echo(ctx context.Context, msg string) (*types.ResponseEch
 
 func (cli *grpcClient) Info(ctx context.Context, req *types.RequestInfo) (*types.ResponseInfo, error) {
 	return cli.client.Info(ctx, req, grpc.WaitForReady(true))
-}
-
-func (cli *grpcClient) CheckTx(ctx context.Context, req *types.RequestCheckTx) (*types.ResponseCheckTx, error) {
-	return cli.client.CheckTx(ctx, req, grpc.WaitForReady(true))
 }
 
 func (cli *grpcClient) Query(ctx context.Context, req *types.RequestQuery) (*types.ResponseQuery, error) {
@@ -244,4 +210,63 @@ func (cli *grpcClient) VerifyVoteExtension(ctx context.Context, req *types.Reque
 
 func (cli *grpcClient) FinalizeBlock(ctx context.Context, req *types.RequestFinalizeBlock) (*types.ResponseFinalizeBlock, error) {
 	return cli.client.FinalizeBlock(ctx, types.ToRequestFinalizeBlock(req).GetFinalizeBlock(), grpc.WaitForReady(true))
+}
+
+func (cli *grpcClient) CheckTxSync(ctx context.Context, req *types.RequestCheckTx) (*types.ResponseCheckTx, error) {
+	return cli.client.CheckTx(ctx, req, grpc.WaitForReady(true))
+}
+
+func (cli *grpcClient) BeginRecheckTxSync(ctx context.Context, params *types.RequestBeginRecheckTx) (*types.ResponseBeginRecheckTx, error) {
+	reqres, _ := cli.BeginRecheckTxAsync(ctx, params, nil)
+	reqres.Wait()
+	return reqres.Response.GetBeginRecheckTx(), cli.Error()
+}
+
+func (cli *grpcClient) EndRecheckTxSync(ctx context.Context, params *types.RequestEndRecheckTx) (*types.ResponseEndRecheckTx, error) {
+	reqres, _ := cli.EndRecheckTxAsync(ctx, params, nil)
+	reqres.Wait()
+	return reqres.Response.GetEndRecheckTx(), cli.Error()
+}
+
+func (cli *grpcClient) CheckTxAsync(ctx context.Context, req *types.RequestCheckTx, cb ResponseCallback) (*ReqRes, error) {
+	res, err := cli.client.CheckTx(ctx, req, grpc.WaitForReady(true))
+	if err != nil {
+		cli.StopForError(err)
+		return nil, err
+	}
+	return cli.finishAsyncCall(types.ToRequestCheckTx(req), &types.Response{Value: &types.Response_CheckTx{CheckTx: res}}, cb), nil
+}
+
+func (cli *grpcClient) BeginRecheckTxAsync(ctx context.Context, params *types.RequestBeginRecheckTx, cb ResponseCallback) (*ReqRes, error) {
+	req := types.ToRequestBeginRecheckTx(params)
+	res, err := cli.client.BeginRecheckTx(ctx, req.GetBeginRecheckTx(), grpc.WaitForReady(true))
+	if err != nil {
+		cli.StopForError(err)
+	}
+	return cli.finishAsyncCall(req, &types.Response{Value: &types.Response_BeginRecheckTx{BeginRecheckTx: res}}, cb), nil
+}
+
+func (cli *grpcClient) EndRecheckTxAsync(ctx context.Context, params *types.RequestEndRecheckTx, cb ResponseCallback) (*ReqRes, error) {
+	req := types.ToRequestEndRecheckTx(params)
+	res, err := cli.client.EndRecheckTx(ctx, req.GetEndRecheckTx(), grpc.WaitForReady(true))
+	if err != nil {
+		cli.StopForError(err)
+	}
+	return cli.finishAsyncCall(req, &types.Response{Value: &types.Response_EndRecheckTx{EndRecheckTx: res}}, cb), nil
+}
+
+func (cli *grpcClient) CheckTxSyncForApp(context.Context, *types.RequestCheckTx) (*types.ResponseCheckTx, error) {
+	panic("not implemented")
+}
+
+func (cli *grpcClient) CheckTxAsyncForApp(context.Context, *types.RequestCheckTx, types.CheckTxCallback) {
+	panic("not implemented")
+}
+
+func (cli *grpcClient) BeginRecheckTx(ctx context.Context, params *types.RequestBeginRecheckTx) (*types.ResponseBeginRecheckTx, error) {
+	panic("not implemented")
+}
+
+func (cli *grpcClient) EndRecheckTx(ctx context.Context, params *types.RequestEndRecheckTx) (*types.ResponseEndRecheckTx, error) {
+	panic("not implemented")
 }

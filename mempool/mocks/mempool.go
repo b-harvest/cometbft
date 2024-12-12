@@ -16,35 +16,52 @@ type Mempool struct {
 	mock.Mock
 }
 
-// CheckTx provides a mock function with given fields: tx, callback, txInfo
-func (_m *Mempool) CheckTx(tx types.Tx, callback func(*abcitypes.ResponseCheckTx), txInfo mempool.TxInfo) error {
-	ret := _m.Called(tx, callback, txInfo)
-
-	if len(ret) == 0 {
-		panic("no return value specified for CheckTx")
-	}
-
-	var r0 error
-	if rf, ok := ret.Get(0).(func(types.Tx, func(*abcitypes.ResponseCheckTx), mempool.TxInfo) error); ok {
-		r0 = rf(tx, callback, txInfo)
-	} else {
-		r0 = ret.Error(0)
-	}
-
-	return r0
+// CheckTxAsync provides a mock function with given fields: tx, txInfo, prepareCb, checkTxCb
+func (_m *Mempool) CheckTxAsync(tx types.Tx, txInfo mempool.TxInfo, prepareCb func(error), checkTxCb func(*abcitypes.Response)) {
+	_m.Called(tx, txInfo, prepareCb, checkTxCb)
 }
 
-// EnableTxsAvailable provides a mock function with given fields:
+// CheckTxSync provides a mock function with given fields: tx, txInfo
+func (_m *Mempool) CheckTxSync(tx types.Tx, txInfo mempool.TxInfo) (*abcitypes.Response, error) {
+	ret := _m.Called(tx, txInfo)
+
+	if len(ret) == 0 {
+		panic("no return value specified for CheckTxSync")
+	}
+
+	var r0 *abcitypes.Response
+	var r1 error
+	if rf, ok := ret.Get(0).(func(types.Tx, mempool.TxInfo) (*abcitypes.Response, error)); ok {
+		return rf(tx, txInfo)
+	}
+	if rf, ok := ret.Get(0).(func(types.Tx, mempool.TxInfo) *abcitypes.Response); ok {
+		r0 = rf(tx, txInfo)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*abcitypes.Response)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(types.Tx, mempool.TxInfo) error); ok {
+		r1 = rf(tx, txInfo)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// EnableTxsAvailable provides a mock function with no fields
 func (_m *Mempool) EnableTxsAvailable() {
 	_m.Called()
 }
 
-// Flush provides a mock function with given fields:
+// Flush provides a mock function with no fields
 func (_m *Mempool) Flush() {
 	_m.Called()
 }
 
-// FlushAppConn provides a mock function with given fields:
+// FlushAppConn provides a mock function with no fields
 func (_m *Mempool) FlushAppConn() error {
 	ret := _m.Called()
 
@@ -62,7 +79,7 @@ func (_m *Mempool) FlushAppConn() error {
 	return r0
 }
 
-// Lock provides a mock function with given fields:
+// Lock provides a mock function with no fields
 func (_m *Mempool) Lock() {
 	_m.Called()
 }
@@ -125,7 +142,7 @@ func (_m *Mempool) RemoveTxByKey(txKey types.TxKey) error {
 	return r0
 }
 
-// Size provides a mock function with given fields:
+// Size provides a mock function with no fields
 func (_m *Mempool) Size() int {
 	ret := _m.Called()
 
@@ -143,7 +160,7 @@ func (_m *Mempool) Size() int {
 	return r0
 }
 
-// SizeBytes provides a mock function with given fields:
+// SizeBytes provides a mock function with no fields
 func (_m *Mempool) SizeBytes() int64 {
 	ret := _m.Called()
 
@@ -161,7 +178,7 @@ func (_m *Mempool) SizeBytes() int64 {
 	return r0
 }
 
-// TxsAvailable provides a mock function with given fields:
+// TxsAvailable provides a mock function with no fields
 func (_m *Mempool) TxsAvailable() <-chan struct{} {
 	ret := _m.Called()
 
@@ -181,22 +198,22 @@ func (_m *Mempool) TxsAvailable() <-chan struct{} {
 	return r0
 }
 
-// Unlock provides a mock function with given fields:
+// Unlock provides a mock function with no fields
 func (_m *Mempool) Unlock() {
 	_m.Called()
 }
 
-// Update provides a mock function with given fields: blockHeight, blockTxs, deliverTxResponses, newPreFn, newPostFn
-func (_m *Mempool) Update(blockHeight int64, blockTxs types.Txs, deliverTxResponses []*abcitypes.ExecTxResult, newPreFn mempool.PreCheckFunc, newPostFn mempool.PostCheckFunc) error {
-	ret := _m.Called(blockHeight, blockTxs, deliverTxResponses, newPreFn, newPostFn)
+// Update provides a mock function with given fields: block, deliverTxResponses, newPreFn, newPostFn
+func (_m *Mempool) Update(block *types.Block, deliverTxResponses []*abcitypes.ExecTxResult, newPreFn mempool.PreCheckFunc, newPostFn mempool.PostCheckFunc) error {
+	ret := _m.Called(block, deliverTxResponses, newPreFn, newPostFn)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Update")
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(int64, types.Txs, []*abcitypes.ExecTxResult, mempool.PreCheckFunc, mempool.PostCheckFunc) error); ok {
-		r0 = rf(blockHeight, blockTxs, deliverTxResponses, newPreFn, newPostFn)
+	if rf, ok := ret.Get(0).(func(*types.Block, []*abcitypes.ExecTxResult, mempool.PreCheckFunc, mempool.PostCheckFunc) error); ok {
+		r0 = rf(block, deliverTxResponses, newPreFn, newPostFn)
 	} else {
 		r0 = ret.Error(0)
 	}

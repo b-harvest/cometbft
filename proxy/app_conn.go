@@ -27,11 +27,15 @@ type AppConnConsensus interface {
 }
 
 type AppConnMempool interface {
-	SetResponseCallback(abcicli.Callback)
+	SetGlobalCallback(abcicli.GlobalCallback)
 	Error() error
 
-	CheckTx(context.Context, *types.RequestCheckTx) (*types.ResponseCheckTx, error)
-	CheckTxAsync(context.Context, *types.RequestCheckTx) (*abcicli.ReqRes, error)
+	CheckTxSync(context.Context, *types.RequestCheckTx) (*types.ResponseCheckTx, error)
+	BeginRecheckTxSync(context.Context, *types.RequestBeginRecheckTx) (*types.ResponseBeginRecheckTx, error)
+	EndRecheckTxSync(context.Context, *types.RequestEndRecheckTx) (*types.ResponseEndRecheckTx, error)
+
+	CheckTxAsync(context.Context, *types.RequestCheckTx, abcicli.ResponseCallback) (*abcicli.ReqRes, error)
+
 	Flush(context.Context) error
 }
 
@@ -124,8 +128,8 @@ func NewAppConnMempool(appConn abcicli.Client, metrics *Metrics) AppConnMempool 
 	}
 }
 
-func (app *appConnMempool) SetResponseCallback(cb abcicli.Callback) {
-	app.appConn.SetResponseCallback(cb)
+func (app *appConnMempool) SetGlobalCallback(globalCb abcicli.GlobalCallback) {
+	app.appConn.SetGlobalCallback(globalCb)
 }
 
 func (app *appConnMempool) Error() error {
@@ -137,14 +141,22 @@ func (app *appConnMempool) Flush(ctx context.Context) error {
 	return app.appConn.Flush(ctx)
 }
 
-func (app *appConnMempool) CheckTx(ctx context.Context, req *types.RequestCheckTx) (*types.ResponseCheckTx, error) {
+func (app *appConnMempool) CheckTxSync(ctx context.Context, req *types.RequestCheckTx) (*types.ResponseCheckTx, error) {
 	defer addTimeSample(app.metrics.MethodTimingSeconds.With("method", "check_tx", "type", "sync"))()
-	return app.appConn.CheckTx(ctx, req)
+	return app.appConn.CheckTxSync(ctx, req)
 }
 
-func (app *appConnMempool) CheckTxAsync(ctx context.Context, req *types.RequestCheckTx) (*abcicli.ReqRes, error) {
+func (app *appConnMempool) BeginRecheckTxSync(ctx context.Context, req *types.RequestBeginRecheckTx) (*types.ResponseBeginRecheckTx, error) {
+	return app.appConn.BeginRecheckTxSync(ctx, req)
+}
+
+func (app *appConnMempool) EndRecheckTxSync(ctx context.Context, req *types.RequestEndRecheckTx) (*types.ResponseEndRecheckTx, error) {
+	return app.appConn.EndRecheckTxSync(ctx, req)
+}
+
+func (app *appConnMempool) CheckTxAsync(ctx context.Context, req *types.RequestCheckTx, cb abcicli.ResponseCallback) (*abcicli.ReqRes, error) {
 	defer addTimeSample(app.metrics.MethodTimingSeconds.With("method", "check_tx", "type", "async"))()
-	return app.appConn.CheckTxAsync(ctx, req)
+	return app.appConn.CheckTxAsync(ctx, req, cb)
 }
 
 //------------------------------------------------

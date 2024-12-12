@@ -17,12 +17,72 @@ type AppConnMempool struct {
 	mock.Mock
 }
 
-// CheckTx provides a mock function with given fields: _a0, _a1
-func (_m *AppConnMempool) CheckTx(_a0 context.Context, _a1 *types.RequestCheckTx) (*types.ResponseCheckTx, error) {
+// BeginRecheckTxSync provides a mock function with given fields: _a0, _a1
+func (_m *AppConnMempool) BeginRecheckTxSync(_a0 context.Context, _a1 *types.RequestBeginRecheckTx) (*types.ResponseBeginRecheckTx, error) {
 	ret := _m.Called(_a0, _a1)
 
 	if len(ret) == 0 {
-		panic("no return value specified for CheckTx")
+		panic("no return value specified for BeginRecheckTxSync")
+	}
+
+	var r0 *types.ResponseBeginRecheckTx
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, *types.RequestBeginRecheckTx) (*types.ResponseBeginRecheckTx, error)); ok {
+		return rf(_a0, _a1)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, *types.RequestBeginRecheckTx) *types.ResponseBeginRecheckTx); ok {
+		r0 = rf(_a0, _a1)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*types.ResponseBeginRecheckTx)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, *types.RequestBeginRecheckTx) error); ok {
+		r1 = rf(_a0, _a1)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// CheckTxAsync provides a mock function with given fields: _a0, _a1, _a2
+func (_m *AppConnMempool) CheckTxAsync(_a0 context.Context, _a1 *types.RequestCheckTx, _a2 abcicli.ResponseCallback) (*abcicli.ReqRes, error) {
+	ret := _m.Called(_a0, _a1, _a2)
+
+	if len(ret) == 0 {
+		panic("no return value specified for CheckTxAsync")
+	}
+
+	var r0 *abcicli.ReqRes
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, *types.RequestCheckTx, abcicli.ResponseCallback) (*abcicli.ReqRes, error)); ok {
+		return rf(_a0, _a1, _a2)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, *types.RequestCheckTx, abcicli.ResponseCallback) *abcicli.ReqRes); ok {
+		r0 = rf(_a0, _a1, _a2)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*abcicli.ReqRes)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, *types.RequestCheckTx, abcicli.ResponseCallback) error); ok {
+		r1 = rf(_a0, _a1, _a2)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// CheckTxSync provides a mock function with given fields: _a0, _a1
+func (_m *AppConnMempool) CheckTxSync(_a0 context.Context, _a1 *types.RequestCheckTx) (*types.ResponseCheckTx, error) {
+	ret := _m.Called(_a0, _a1)
+
+	if len(ret) == 0 {
+		panic("no return value specified for CheckTxSync")
 	}
 
 	var r0 *types.ResponseCheckTx
@@ -47,28 +107,28 @@ func (_m *AppConnMempool) CheckTx(_a0 context.Context, _a1 *types.RequestCheckTx
 	return r0, r1
 }
 
-// CheckTxAsync provides a mock function with given fields: _a0, _a1
-func (_m *AppConnMempool) CheckTxAsync(_a0 context.Context, _a1 *types.RequestCheckTx) (*abcicli.ReqRes, error) {
+// EndRecheckTxSync provides a mock function with given fields: _a0, _a1
+func (_m *AppConnMempool) EndRecheckTxSync(_a0 context.Context, _a1 *types.RequestEndRecheckTx) (*types.ResponseEndRecheckTx, error) {
 	ret := _m.Called(_a0, _a1)
 
 	if len(ret) == 0 {
-		panic("no return value specified for CheckTxAsync")
+		panic("no return value specified for EndRecheckTxSync")
 	}
 
-	var r0 *abcicli.ReqRes
+	var r0 *types.ResponseEndRecheckTx
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, *types.RequestCheckTx) (*abcicli.ReqRes, error)); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, *types.RequestEndRecheckTx) (*types.ResponseEndRecheckTx, error)); ok {
 		return rf(_a0, _a1)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, *types.RequestCheckTx) *abcicli.ReqRes); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, *types.RequestEndRecheckTx) *types.ResponseEndRecheckTx); ok {
 		r0 = rf(_a0, _a1)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*abcicli.ReqRes)
+			r0 = ret.Get(0).(*types.ResponseEndRecheckTx)
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, *types.RequestCheckTx) error); ok {
+	if rf, ok := ret.Get(1).(func(context.Context, *types.RequestEndRecheckTx) error); ok {
 		r1 = rf(_a0, _a1)
 	} else {
 		r1 = ret.Error(1)
@@ -77,7 +137,7 @@ func (_m *AppConnMempool) CheckTxAsync(_a0 context.Context, _a1 *types.RequestCh
 	return r0, r1
 }
 
-// Error provides a mock function with given fields:
+// Error provides a mock function with no fields
 func (_m *AppConnMempool) Error() error {
 	ret := _m.Called()
 
@@ -113,8 +173,8 @@ func (_m *AppConnMempool) Flush(_a0 context.Context) error {
 	return r0
 }
 
-// SetResponseCallback provides a mock function with given fields: _a0
-func (_m *AppConnMempool) SetResponseCallback(_a0 abcicli.Callback) {
+// SetGlobalCallback provides a mock function with given fields: _a0
+func (_m *AppConnMempool) SetGlobalCallback(_a0 abcicli.GlobalCallback) {
 	_m.Called(_a0)
 }
 

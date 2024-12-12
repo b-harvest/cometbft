@@ -100,7 +100,7 @@ func TestReactorConcurrency(t *testing.T) {
 			for i := range txs {
 				txResponses[i] = &abci.ExecTxResult{Code: 0}
 			}
-			err := reactors[0].mempool.Update(1, txs, txResponses, nil, nil)
+			err := reactors[0].mempool.Update(newTestBlock(1, txs), txResponses, nil, nil)
 			assert.NoError(t, err)
 		}()
 
@@ -112,7 +112,7 @@ func TestReactorConcurrency(t *testing.T) {
 
 			reactors[1].mempool.Lock()
 			defer reactors[1].mempool.Unlock()
-			err := reactors[1].mempool.Update(1, []types.Tx{}, make([]*abci.ExecTxResult, 0), nil, nil)
+			err := reactors[1].mempool.Update(newTestBlock(1, []types.Tx{}), make([]*abci.ExecTxResult, 0), nil, nil)
 			assert.NoError(t, err)
 		}()
 
@@ -168,9 +168,7 @@ func TestMempoolReactorMaxTxBytes(t *testing.T) {
 	// Broadcast a tx, which has the max size
 	// => ensure it's received by the second reactor.
 	tx1 := kvstore.NewRandomTx(config.Mempool.MaxTxBytes)
-	err := reactors[0].mempool.CheckTx(tx1, func(resp *abci.ResponseCheckTx) {
-		require.False(t, resp.IsErr())
-	}, TxInfo{SenderID: UnknownPeerID})
+	_, err := reactors[0].mempool.CheckTxSync(tx1, TxInfo{SenderID: UnknownPeerID})
 	require.NoError(t, err)
 	waitForTxsOnReactors(t, []types.Tx{tx1}, reactors)
 
@@ -180,9 +178,7 @@ func TestMempoolReactorMaxTxBytes(t *testing.T) {
 	// Broadcast a tx, which is beyond the max size
 	// => ensure it's not sent
 	tx2 := kvstore.NewRandomTx(config.Mempool.MaxTxBytes + 1)
-	err = reactors[0].mempool.CheckTx(tx2, func(resp *abci.ResponseCheckTx) {
-		require.False(t, resp.IsErr())
-	}, TxInfo{SenderID: UnknownPeerID})
+	_, err = reactors[0].mempool.CheckTxSync(tx2, TxInfo{SenderID: UnknownPeerID})
 	require.Error(t, err)
 }
 

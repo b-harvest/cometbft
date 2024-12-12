@@ -124,6 +124,18 @@ func ToRequestFinalizeBlock(req *RequestFinalizeBlock) *Request {
 	}
 }
 
+func ToRequestBeginRecheckTx(req *RequestBeginRecheckTx) *Request {
+	return &Request{
+		Value: &Request_BeginRecheckTx{req},
+	}
+}
+
+func ToRequestEndRecheckTx(req *RequestEndRecheckTx) *Request {
+	return &Request{
+		Value: &Request_EndRecheckTx{req},
+	}
+}
+
 //----------------------------------------
 
 func ToResponseException(errStr string) *Response {
@@ -225,5 +237,17 @@ func ToResponseVerifyVoteExtension(res *ResponseVerifyVoteExtension) *Response {
 func ToResponseFinalizeBlock(res *ResponseFinalizeBlock) *Response {
 	return &Response{
 		Value: &Response_FinalizeBlock{res},
+	}
+}
+
+func ToResponseBeginRecheckTx(res *ResponseBeginRecheckTx) *Response {
+	return &Response{
+		Value: &Response_BeginRecheckTx{res},
+	}
+}
+
+func ToResponseEndRecheckTx(res *ResponseEndRecheckTx) *Response {
+	return &Response{
+		Value: &Response_EndRecheckTx{res},
 	}
 }

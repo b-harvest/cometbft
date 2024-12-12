@@ -1505,6 +1505,10 @@ func TestExtendVoteCalledWhenEnabled(t *testing.T) {
 			}
 			m.On("Commit", mock.Anything, mock.Anything).Return(&abci.ResponseCommit{}, nil).Maybe()
 			m.On("FinalizeBlock", mock.Anything, mock.Anything).Return(&abci.ResponseFinalizeBlock{}, nil).Maybe()
+
+			m.On("BeginRecheckTx", mock.Anything, mock.Anything).Return(&abci.ResponseBeginRecheckTx{}, nil).Maybe()
+			m.On("EndRecheckTx", mock.Anything, mock.Anything).Return(&abci.ResponseEndRecheckTx{}, nil).Maybe()
+
 			height := int64(1)
 			if !testCase.enabled {
 				height = 0
@@ -1591,6 +1595,10 @@ func TestVerifyVoteExtensionNotCalledOnAbsentPrecommit(t *testing.T) {
 	}, nil)
 	m.On("FinalizeBlock", mock.Anything, mock.Anything).Return(&abci.ResponseFinalizeBlock{}, nil).Maybe()
 	m.On("Commit", mock.Anything, mock.Anything).Return(&abci.ResponseCommit{}, nil).Maybe()
+
+	m.On("BeginRecheckTx", mock.Anything, mock.Anything).Return(&abci.ResponseBeginRecheckTx{}, nil).Maybe()
+	m.On("EndRecheckTx", mock.Anything, mock.Anything).Return(&abci.ResponseEndRecheckTx{}, nil).Maybe()
+
 	cs1, vss := randStateWithApp(4, m)
 	height, round := cs1.Height, cs1.Round
 	cs1.state.ConsensusParams.ABCI.VoteExtensionsEnableHeight = cs1.Height
@@ -1676,6 +1684,9 @@ func TestPrepareProposalReceivesVoteExtensions(t *testing.T) {
 	m.On("VerifyVoteExtension", mock.Anything, mock.Anything).Return(&abci.ResponseVerifyVoteExtension{Status: abci.ResponseVerifyVoteExtension_ACCEPT}, nil)
 	m.On("Commit", mock.Anything, mock.Anything).Return(&abci.ResponseCommit{}, nil).Maybe()
 	m.On("FinalizeBlock", mock.Anything, mock.Anything).Return(&abci.ResponseFinalizeBlock{}, nil)
+
+	m.On("BeginRecheckTx", mock.Anything, mock.Anything).Return(&abci.ResponseBeginRecheckTx{}, nil).Maybe()
+	m.On("EndRecheckTx", mock.Anything, mock.Anything).Return(&abci.ResponseEndRecheckTx{}, nil).Maybe()
 
 	cs1, vss := randStateWithApp(4, m)
 	height, round := cs1.Height, cs1.Round
@@ -1778,6 +1789,9 @@ func TestFinalizeBlockCalled(t *testing.T) {
 			r := &abci.ResponseFinalizeBlock{AppHash: []byte("the_hash")}
 			m.On("FinalizeBlock", mock.Anything, mock.Anything).Return(r, nil).Maybe()
 			m.On("Commit", mock.Anything, mock.Anything).Return(&abci.ResponseCommit{}, nil).Maybe()
+
+			m.On("BeginRecheckTx", mock.Anything, mock.Anything).Return(&abci.ResponseBeginRecheckTx{}, nil).Maybe()
+			m.On("EndRecheckTx", mock.Anything, mock.Anything).Return(&abci.ResponseEndRecheckTx{}, nil).Maybe()
 
 			cs1, vss := randStateWithApp(4, m)
 			height, round := cs1.Height, cs1.Round
@@ -1894,6 +1908,10 @@ func TestVoteExtensionEnableHeight(t *testing.T) {
 			}
 			m.On("FinalizeBlock", mock.Anything, mock.Anything).Return(&abci.ResponseFinalizeBlock{}, nil).Maybe()
 			m.On("Commit", mock.Anything, mock.Anything).Return(&abci.ResponseCommit{}, nil).Maybe()
+
+			m.On("BeginRecheckTx", mock.Anything, mock.Anything).Return(&abci.ResponseBeginRecheckTx{}, nil).Maybe()
+			m.On("EndRecheckTx", mock.Anything, mock.Anything).Return(&abci.ResponseEndRecheckTx{}, nil).Maybe()
+
 			cs1, vss := randStateWithAppWithHeight(numValidators, m, testCase.enableHeight)
 			cs1.state.ConsensusParams.ABCI.VoteExtensionsEnableHeight = testCase.enableHeight
 			height, round := cs1.Height, cs1.Round

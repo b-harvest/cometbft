@@ -223,7 +223,7 @@ func (s *SocketServer) handleRequest(ctx context.Context, req *types.Request) (*
 		}
 		return types.ToResponseInfo(res), nil
 	case *types.Request_CheckTx:
-		res, err := s.app.CheckTx(ctx, r.CheckTx)
+		res, err := s.app.CheckTxSyncForApp(ctx, r.CheckTx)
 		if err != nil {
 			return nil, err
 		}
@@ -300,6 +300,18 @@ func (s *SocketServer) handleRequest(ctx context.Context, req *types.Request) (*
 			return nil, err
 		}
 		return types.ToResponseVerifyVoteExtension(res), nil
+	case *types.Request_BeginRecheckTx:
+		res, err := s.app.BeginRecheckTx(ctx, r.BeginRecheckTx)
+		if err != nil {
+			return nil, err
+		}
+		return types.ToResponseBeginRecheckTx(res), nil
+	case *types.Request_EndRecheckTx:
+		res, err := s.app.EndRecheckTx(ctx, r.EndRecheckTx)
+		if err != nil {
+			return nil, err
+		}
+		return types.ToResponseEndRecheckTx(res), nil
 	default:
 		return nil, fmt.Errorf("unknown request from client: %T", req)
 	}
