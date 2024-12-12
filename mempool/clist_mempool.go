@@ -268,7 +268,7 @@ func (mem *CListMempool) checkTxAsync(tx types.Tx, txInfo TxInfo, prepareCb func
 	}
 
 	// CONTRACT: `app.CheckTxAsync()` should check whether `GasWanted` is valid (0 <= GasWanted <= block.masGas)
-	mem.proxyAppConn.CheckTxAsync(context.TODO(), &abci.RequestCheckTx{Tx: tx}, func(res *abci.Response) {
+	mem.proxyAppConn.CheckTxAsync(context.TODO(), &abci.RequestCheckTx{Tx: tx}, func(res *abci.Response) { //nolint: errcheck
 		mem.reqResCb(tx, txInfo, res, func(response *abci.Response) {
 			if checkTxCb != nil {
 				checkTxCb(response)
@@ -732,7 +732,7 @@ func (mem *CListMempool) recheckTxs() {
 			Tx:   tx,
 			Type: abci.CheckTxType_Recheck,
 		}
-		mem.proxyAppConn.CheckTxAsync(context.TODO(), &req, func(res *abci.Response) {
+		mem.proxyAppConn.CheckTxAsync(context.TODO(), &req, func(res *abci.Response) { //nolint: errcheck
 			wg.Done()
 		})
 	}

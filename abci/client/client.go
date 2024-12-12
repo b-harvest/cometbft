@@ -92,12 +92,12 @@ func NewReqRes(req *types.Request, cb ResponseCallback) *ReqRes {
 
 // InvokeCallback invokes a thread-safe execution of the configured callback
 // if non-nil.
-func (reqRes *ReqRes) InvokeCallback() {
-	reqRes.mtx.Lock()
-	defer reqRes.mtx.Unlock()
+func (r *ReqRes) InvokeCallback() {
+	r.mtx.Lock()
+	defer r.mtx.Unlock()
 
-	if reqRes.cb != nil {
-		reqRes.cb(reqRes.Response)
+	if r.cb != nil {
+		r.cb(r.Response)
 	}
 }
 
