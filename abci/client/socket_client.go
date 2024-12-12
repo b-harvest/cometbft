@@ -544,6 +544,10 @@ func resMatchesReq(req *types.Request, res *types.Response) (ok bool) {
 		_, ok = res.Value.(*types.Response_ProcessProposal)
 	case *types.Request_FinalizeBlock:
 		_, ok = res.Value.(*types.Response_FinalizeBlock)
+	case *types.Request_BeginRecheckTx:
+		_, ok = res.Value.(*types.Response_BeginRecheckTx)
+	case *types.Request_EndRecheckTx:
+		_, ok = res.Value.(*types.Response_EndRecheckTx)
 	}
 	return ok
 }

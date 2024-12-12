@@ -679,7 +679,7 @@ func (mem *CListMempool) Update(
 		res, err := mem.proxyAppConn.BeginRecheckTxSync(context.TODO(), &abci.RequestBeginRecheckTx{
 			Header: types.TM2PB.Header(&block.Header),
 		})
-		if res.Code == abci.CodeTypeOK && err == nil {
+		if res != nil && res.Code == abci.CodeTypeOK && err == nil {
 			mem.recheckTxs()
 			res2, err2 := mem.proxyAppConn.EndRecheckTxSync(context.TODO(), &abci.RequestEndRecheckTx{Height: height})
 			if res2.Code != abci.CodeTypeOK {
@@ -689,7 +689,7 @@ func (mem *CListMempool) Update(
 				return errors.Join(err2, errors.New("the function EndRecheckTxSync returns an error"))
 			}
 		} else {
-			if res.Code != abci.CodeTypeOK {
+			if res != nil && res.Code != abci.CodeTypeOK {
 				return errors.New("the function BeginRecheckTxSync does not respond CodeTypeOK")
 			}
 			if err != nil {
