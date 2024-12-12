@@ -216,8 +216,8 @@ func TestCallbackInvokedWhenSetEarly(t *testing.T) {
 	cb := func(_ *types.Response) {
 		close(done)
 	}
-	reqRes, err := c.CheckTxAsync(ctx, &types.RequestCheckTx{}, cb)
-	reqRes.SetDone(nil)
+	_, err := c.CheckTxAsync(ctx, &types.RequestCheckTx{}, cb)
+	app.wg.Done()
 	require.NoError(t, err)
 
 	called := func() bool {
