@@ -278,8 +278,11 @@ func TestMempoolUpdateDoesNotPanicWhenApplicationMissedTx(t *testing.T) {
 	mockClient.On("SetLogger", mock.Anything)
 
 	mockClient.On("Error").Return(nil).Times(4)
-	mockClient.On("SetResponseCallback", mock.MatchedBy(func(cb abciclient.GlobalCallback) bool { callback = cb; return true }))
+	mockClient.On("SetGlobalCallback", mock.MatchedBy(func(cb abciclient.GlobalCallback) bool { callback = cb; return true }))
 	mockClient.On("Flush", mock.Anything).Return(nil)
+
+	mockClient.On("BeginRecheckTxSync", mock.Anything, mock.Anything).Return(&abci.ResponseBeginRecheckTx{}, nil)
+	mockClient.On("EndRecheckTxSync", mock.Anything, mock.Anything).Return(&abci.ResponseEndRecheckTx{}, nil)
 
 	mp, cleanup, err := newMempoolWithAppMock(mockClient)
 	require.NoError(t, err)
@@ -289,13 +292,23 @@ func TestMempoolUpdateDoesNotPanicWhenApplicationMissedTx(t *testing.T) {
 	txs := []types.Tx{[]byte{0x01}, []byte{0x02}, []byte{0x03}, []byte{0x04}}
 	for _, tx := range txs {
 		reqRes := newReqRes(tx, abci.CodeTypeOK, abci.CheckTxType_New)
-		mockClient.On("CheckTxAsync", mock.Anything, mock.Anything).Return(reqRes, nil)
-		_, err := mp.CheckTxSync(tx, TxInfo{})
-		require.NoError(t, err)
+		mockClient.On("CheckTxAsync", mock.Anything, mock.Anything, mock.Anything).Run(
+			func(args mock.Arguments) {
+				callback := args[2].(abciclient.ResponseCallback)
+				callback(&abci.Response{
+					Value: &abci.Response_CheckTx{
+						CheckTx: &abci.ResponseCheckTx{
+							Code: abci.CodeTypeOK,
+						},
+					},
+				})
+			}).Return(reqRes, nil)
+		mp.CheckTxAsync(tx, TxInfo{}, nil, nil)
 
 		// ensure that the callback that the mempool sets on the ReqRes is run.
 		reqRes.InvokeCallback()
 	}
+	time.Sleep(10 * time.Millisecond)
 	require.Len(t, txs, mp.Size())
 
 	// Calling update to remove the first transaction from the mempool.
@@ -799,7 +812,7 @@ func TestMempoolSyncCheckTxReturnError(t *testing.T) {
 	mockClient := new(abciclimocks.Client)
 	mockClient.On("Start").Return(nil)
 	mockClient.On("SetLogger", mock.Anything)
-	mockClient.On("SetResponseCallback", mock.Anything)
+	mockClient.On("SetGlobalCallback", mock.Anything)
 
 	mp, cleanup, err := newMempoolWithAppMock(mockClient)
 	require.NoError(t, err)
@@ -824,7 +837,7 @@ func TestMempoolSyncRecheckTxReturnError(t *testing.T) {
 	mockClient := new(abciclimocks.Client)
 	mockClient.On("Start").Return(nil)
 	mockClient.On("SetLogger", mock.Anything)
-	mockClient.On("SetResponseCallback", mock.Anything)
+	mockClient.On("SetGlobalCallback", mock.Anything)
 	mockClient.On("Error").Return(nil)
 
 	mp, cleanup, err := newMempoolWithAppMock(mockClient)
@@ -835,13 +848,23 @@ func TestMempoolSyncRecheckTxReturnError(t *testing.T) {
 	txs := []types.Tx{[]byte{0x01}, []byte{0x02}}
 	for _, tx := range txs {
 		reqRes := newReqRes(tx, abci.CodeTypeOK, abci.CheckTxType_New)
-		mockClient.On("CheckTxAsync", mock.Anything, mock.Anything).Return(reqRes, nil).Once()
-		_, err := mp.CheckTxSync(tx, TxInfo{})
-		require.NoError(t, err)
+		mockClient.On("CheckTxAsync", mock.Anything, mock.Anything, mock.Anything).Run(
+			func(args mock.Arguments) {
+				callback := args[2].(abciclient.ResponseCallback)
+				callback(&abci.Response{
+					Value: &abci.Response_CheckTx{
+						CheckTx: &abci.ResponseCheckTx{
+							Code: abci.CodeTypeOK,
+						},
+					},
+				})
+			}).Return(reqRes, nil).Once()
+		mp.CheckTxAsync(tx, TxInfo{}, nil, nil)
 
 		// ensure that the callback that the mempool sets on the ReqRes is run.
 		reqRes.InvokeCallback()
 	}
+	time.Sleep(20 * time.Millisecond)
 	require.Len(t, txs, mp.Size())
 
 	// The first tx is valid when rechecking and the client will call the callback right after the
@@ -869,7 +892,7 @@ func TestMempoolAsyncRecheckTxReturnError(t *testing.T) {
 	mockClient.On("Start").Return(nil)
 	mockClient.On("SetLogger", mock.Anything)
 	mockClient.On("Error").Return(nil).Times(4)
-	mockClient.On("SetResponseCallback", mock.MatchedBy(func(cb abciclient.GlobalCallback) bool { callback = cb; return true }))
+	mockClient.On("SetGlobalCallback", mock.MatchedBy(func(cb abciclient.GlobalCallback) bool { callback = cb; return true }))
 
 	mp, cleanup, err := newMempoolWithAppMock(mockClient)
 	require.NoError(t, err)
@@ -879,14 +902,23 @@ func TestMempoolAsyncRecheckTxReturnError(t *testing.T) {
 	txs := []types.Tx{[]byte{0x01}, []byte{0x02}, []byte{0x03}, []byte{0x04}}
 	for _, tx := range txs {
 		reqRes := newReqRes(tx, abci.CodeTypeOK, abci.CheckTxType_New)
-		mockClient.On("CheckTxAsync", mock.Anything, mock.Anything).Return(reqRes, nil).Once()
-		_, err := mp.CheckTxSync(tx, TxInfo{})
-		require.NoError(t, err)
+		mockClient.On("CheckTxAsync", mock.Anything, mock.Anything, mock.Anything).Run(
+			func(args mock.Arguments) {
+				callback := args[2].(abciclient.ResponseCallback)
+				callback(&abci.Response{
+					Value: &abci.Response_CheckTx{
+						CheckTx: &abci.ResponseCheckTx{
+							Code: abci.CodeTypeOK,
+						},
+					},
+				})
+			}).Return(reqRes, nil).Once()
+		mp.CheckTxAsync(tx, TxInfo{}, nil, nil)
 
 		// ensure that the callback that the mempool sets on the ReqRes is run.
 		reqRes.InvokeCallback()
 	}
-
+	time.Sleep(20 * time.Millisecond)
 	// The 4 txs are added to the mempool.
 	require.Len(t, txs, mp.Size())
 
@@ -894,7 +926,17 @@ func TestMempoolAsyncRecheckTxReturnError(t *testing.T) {
 	mockClient.AssertExpectations(t)
 
 	// One call to CheckTxAsync per tx, for rechecking.
-	mockClient.On("CheckTxAsync", mock.Anything, mock.Anything).Return(nil, nil).Times(4)
+	mockClient.On("CheckTxAsync", mock.Anything, mock.Anything, mock.Anything).Run(
+		func(args mock.Arguments) {
+			callback := args[2].(abciclient.ResponseCallback)
+			callback(&abci.Response{
+				Value: &abci.Response_CheckTx{
+					CheckTx: &abci.ResponseCheckTx{
+						Code: abci.CodeTypeOK,
+					},
+				},
+			})
+		}).Return(nil, nil).Times(4)
 
 	// On the async client, the callbacks are executed when flushing the connection. The app replies
 	// to the request for the first tx (valid) and for the third tx (invalid), so the callback is
