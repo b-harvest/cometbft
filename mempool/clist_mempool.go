@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -55,6 +56,12 @@ type CListMempool struct {
 
 	logger  log.Logger
 	metrics *Metrics
+
+	// counter
+	addedTx    uint32
+	rejectedTx uint32
+	// File for logging counters
+	counterFile *os.File
 }
 
 var _ Mempool = &CListMempool{}
@@ -92,7 +99,45 @@ func NewCListMempool(
 		option(mp)
 	}
 
+	var err error
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		mp.logger.Error("Failed to get home directory", "err", err)
+	}
+	mp.counterFile, err = os.OpenFile(homeDir+"/customlogs/comet_mempool-counters.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		mp.logger.Error("Failed to open counters.log", "err", err)
+	}
+
+	go mp.logCounters()
 	return mp
+}
+
+// logCounters logs the counter values every 1 second
+func (mem *CListMempool) logCounters() {
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			// Atomically load and reset counters
+			addedTx := atomic.SwapUint32(&mem.addedTx, 0)
+			rejectedTx := atomic.SwapUint32(&mem.rejectedTx, 0)
+
+			// Get the current timestamp
+			timestamp := time.Now().UTC().UnixNano()
+
+			// Create a CSV line
+			logLine := fmt.Sprintf("%d,%d,%d\n",
+				timestamp, addedTx, rejectedTx)
+
+			// Append the line to the file
+			if _, err := mem.counterFile.WriteString(logLine); err != nil {
+				fmt.Printf("failed to write counter log: %v\n", err)
+			}
+		}
+	}
 }
 
 func (mem *CListMempool) getCElement(txKey types.TxKey) (*clist.CElement, bool) {
@@ -443,6 +488,7 @@ func (mem *CListMempool) resCbFirstTime(
 			}
 			memTx.addSender(txInfo.SenderID)
 			mem.addTx(memTx)
+			atomic.AddUint32(&mem.addedTx, 1)
 			mem.logger.Debug(
 				"added good transaction",
 				"tx", types.Tx(tx).Hash(),
@@ -452,6 +498,7 @@ func (mem *CListMempool) resCbFirstTime(
 			)
 			mem.notifyTxsAvailable()
 		} else {
+			atomic.AddUint32(&mem.rejectedTx, 1)
 			// ignore bad transaction
 			mem.logger.Debug(
 				"rejected bad transaction",
